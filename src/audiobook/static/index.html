@@ -9,7 +9,8 @@
 <body>
   <main>
     <header><p class="eyebrow">LOCAL AUDIO WORKSHOP</p><h1>Audiobook Foundry</h1><p>Turn a supported web novel into chapter-by-chapter audio.</p></header>
-    <section class="panel">
+    <nav class="tabs" aria-label="Application sections"><button class="tab active" data-view="generate" type="button">Generate</button><button class="tab" data-view="storage" type="button">Storage</button></nav>
+    <section class="panel generate-view">
       <div class="section-heading"><div><h2>Design a narrator</h2><p class="hint">Generate and audition a reusable voice before choosing a novel.</p></div></div>
       <form id="voice-form">
         <div class="row"><label>Voice name<input id="voice-name" maxlength="120" value="Narrator" required></label><label>Language<input id="voice-language" value="Auto"></label></div>
@@ -20,7 +21,7 @@
       </form>
       <div id="voices" class="voices"><p class="empty">No saved voices yet.</p></div>
     </section>
-    <section class="panel">
+    <section class="panel generate-view">
       <form id="job-form">
         <label>Novel URL<input id="novel-url" type="url" required placeholder="https://supported-site.example/novel"></label>
         <div class="row">
@@ -47,7 +48,8 @@
         <p id="form-error" class="error" role="alert"></p>
       </form>
     </section>
-    <section><div class="section-title"><h2>Jobs</h2><button class="quiet" id="refresh" type="button">Refresh</button></div><div id="jobs" class="jobs"><p class="empty">No jobs yet.</p></div></section>
+    <section class="generate-view"><div class="section-title"><h2>Jobs</h2><button class="quiet" id="refresh" type="button">Refresh</button></div><div id="jobs" class="jobs"><p class="empty">No jobs yet.</p></div></section>
+    <section class="storage-view" hidden><div class="section-title"><div><h2>Generated files</h2><p class="hint">Deleting files keeps the job history, but permanently removes its WAVs, voice reference, and ZIP.</p></div><button class="quiet" id="refresh-storage" type="button">Refresh</button></div><div id="storage" class="jobs"><p class="empty">No runs yet.</p></div></section>
   </main>
   <script src="/static/app.js"></script>
 </body>

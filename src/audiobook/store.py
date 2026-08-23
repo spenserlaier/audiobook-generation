@@ -48,6 +48,7 @@ class JobStore:
                 "reference_text": "TEXT NOT NULL DEFAULT ''",
                 "voice_preview_url": "TEXT",
                 "voice_id": "TEXT",
+                "hidden": "INTEGER NOT NULL DEFAULT 0",
             }
             for name, definition in migrations.items():
                 if name not in columns:
@@ -151,12 +152,31 @@ class JobStore:
             raise KeyError(job_id)
         return Job.model_validate(dict(row))
 
-    def list(self, limit: int = 100) -> list[Job]:
+    def list(self, limit: int = 100, include_hidden: bool = False) -> list[Job]:
         with self._connect() as db:
-            rows = db.execute(
-                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
-            ).fetchall()
+            if include_hidden:
+                rows = db.execute(
+                    "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
+                ).fetchall()
+            else:
+                rows = db.execute(
+                    "SELECT * FROM jobs WHERE hidden = 0 ORDER BY created_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
         return [Job.model_validate(dict(row)) for row in rows]
+
+    def hide(self, job_id: str) -> Job:
+        return self.update(job_id, hidden=True)
+
+    def clear_output_references(self, job_id: str) -> None:
+        with self._connect() as db:
+            db.execute(
+                "UPDATE jobs SET output_dir = NULL, voice_preview_url = NULL WHERE id = ?",
+                (job_id,),
+            )
+            db.execute(
+                "UPDATE chapters SET audio_url = NULL WHERE job_id = ?", (job_id,)
+            )
 
     def update(self, job_id: str, **values: object) -> Job:
         allowed = set(Job.model_fields) - {"id", "created_at", "updated_at"}

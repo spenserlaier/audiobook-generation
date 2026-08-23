@@ -79,6 +79,16 @@ class Job(BaseModel):
     output_dir: str | None
     created_at: datetime
     updated_at: datetime
+    hidden: bool = False
+
+
+class StorageEntry(BaseModel):
+    job_id: str
+    title: str
+    status: JobStatus
+    hidden: bool
+    file_count: int
+    size_bytes: int
 
 
 class VoiceStatus(StrEnum):

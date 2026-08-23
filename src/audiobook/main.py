@@ -1,3 +1,4 @@
+import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -8,7 +9,16 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
-from .models import ChapterRecord, CreateJob, CreateVoice, Job, SynthesisMode, Voice, VoiceStatus
+from .models import (
+    ChapterRecord,
+    CreateJob,
+    CreateVoice,
+    Job,
+    StorageEntry,
+    SynthesisMode,
+    Voice,
+    VoiceStatus,
+)
 from .pipeline import Pipeline, WorkerPool
 from .store import JobStore
 
@@ -88,6 +98,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Job not found") from exc
 
+    @app.delete("/api/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def hide_job(job_id: str) -> None:
+        try:
+            store.hide(job_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Job not found") from exc
+
     @app.get("/api/jobs/{job_id}/chapters", response_model=list[ChapterRecord])
     async def get_chapters(job_id: str) -> list[ChapterRecord]:
         try:
@@ -126,6 +143,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Job not found") from exc
         if job.status != "completed":
             raise HTTPException(status_code=409, detail="Audiobook is not complete")
+        if not job.output_dir:
+            raise HTTPException(status_code=404, detail="Generated files have been removed")
         archive = settings.data_dir / "jobs" / job.id / "audiobook.zip"
         chapters = store.chapters(job.id)
         with ZipFile(archive, "w", compression=ZIP_DEFLATED) as bundle:
@@ -168,6 +187,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if voice.status != VoiceStatus.READY or not path.is_file():
             raise HTTPException(status_code=404, detail="Voice preview is not ready")
         return stream_file(path, "audio/wav", "voice-preview.wav")
+
+    @app.get("/api/storage", response_model=list[StorageEntry])
+    async def list_storage() -> list[StorageEntry]:
+        entries: list[StorageEntry] = []
+        for job in store.list(include_hidden=True):
+            directory = settings.data_dir / "jobs" / job.id
+            files = [path for path in directory.rglob("*") if path.is_file()]
+            entries.append(
+                StorageEntry(
+                    job_id=job.id,
+                    title=job.title or "Untitled audiobook",
+                    status=job.status,
+                    hidden=job.hidden,
+                    file_count=len(files),
+                    size_bytes=sum(path.stat().st_size for path in files),
+                )
+            )
+        return entries
+
+    @app.delete("/api/storage/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_job_files(job_id: str) -> None:
+        try:
+            job = store.get(job_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Job not found") from exc
+        if job.status in {"queued", "crawling", "synthesizing"}:
+            raise HTTPException(status_code=409, detail="Cannot delete files for an active job")
+        directory = settings.data_dir / "jobs" / job.id
+        if directory.is_dir():
+            shutil.rmtree(directory)
+        store.clear_output_references(job.id)
 
     return app
 

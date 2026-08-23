@@ -103,3 +103,20 @@ async def test_reusable_voice_preview_and_job_download(tmp_path):
             assert archive.status_code == 200
             with ZipFile(BytesIO(archive.content)) as bundle:
                 assert bundle.namelist() == ["chapter-0001.wav", "chapter-0002.wav"]
+
+            storage = (await client.get("/api/storage")).json()
+            entry = next(item for item in storage if item["job_id"] == job_id)
+            assert entry["file_count"] >= 3
+            assert entry["size_bytes"] > 0
+
+            assert (await client.delete(f"/api/jobs/{job_id}")).status_code == 204
+            assert all(item["id"] != job_id for item in (await client.get("/api/jobs")).json())
+            storage = (await client.get("/api/storage")).json()
+            assert next(item for item in storage if item["job_id"] == job_id)["hidden"] is True
+
+            response = await client.delete(f"/api/storage/jobs/{job_id}")
+            assert response.status_code == 204
+            assert not (tmp_path / "jobs" / job_id).exists()
+            assert (await client.get(f"/api/jobs/{job_id}")).json()["output_dir"] is None
+            chapters = (await client.get(f"/api/jobs/{job_id}/chapters")).json()
+            assert all(chapter["audio_url"] is None for chapter in chapters)
