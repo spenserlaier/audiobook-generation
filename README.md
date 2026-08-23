@@ -25,15 +25,15 @@ Open <http://127.0.0.1:8000>. Submit any valid URL. API documentation is at
 Use a fresh Python 3.11 or 3.12 environment and install the optional integrations:
 
 ```bash
-pip install -e '.[crawler,tts]'
+pip install -e '.[crawler,tts-faster]'
 audiobook-server
 ```
 
-For the CUDA-graph backend, install its separate extra and select it explicitly:
+The CUDA-graph-powered `faster-qwen3-tts` backend is the default. To use the official backend instead:
 
 ```bash
-pip install -e '.[crawler,tts-faster]'
-AUDIOBOOK_TTS_BACKEND=faster audiobook-server
+pip install -e '.[crawler,tts]'
+AUDIOBOOK_TTS_BACKEND=official audiobook-server
 ```
 
 `faster-qwen3-tts` is pinned to 0.3.2 so upgrades cannot silently change its CUDA graph or prompt
@@ -82,7 +82,7 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | Optional built-in voice model |
 | `AUDIOBOOK_VOICE_DESIGN_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` | Narrative voice design model |
 | `AUDIOBOOK_VOICE_CLONE_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Designed-voice cloning model |
-| `AUDIOBOOK_TTS_BACKEND` | `official` | `official` or opt-in `faster` CUDA graphs |
+| `AUDIOBOOK_TTS_BACKEND` | `faster` | `faster` CUDA graphs or the `official` backend |
 | `AUDIOBOOK_TTS_DEVICE` | `cuda:0` | PyTorch device map |
 | `AUDIOBOOK_TTS_DTYPE` | `bfloat16` | PyTorch dtype name |
 | `AUDIOBOOK_TTS_ATTENTION` | `auto` | `flash_attention_2` when installed, otherwise `sdpa` |
@@ -92,6 +92,9 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_WORKER_COUNT` | `1` | Concurrent background jobs; one is safest for GPU memory |
 | `AUDIOBOOK_TTS_RELEASE_AFTER_JOB` | `true` | Release model and cached VRAM after each job |
 | `AUDIOBOOK_MOCK_PIPELINE` | `false` | Use deterministic local chapters and short tone WAVs |
+
+The UI can generate reusable narrator previews before a novel is submitted. Completed chapters can
+be played or downloaded individually, and completed jobs provide a ZIP containing every WAV.
 
 Jobs move through `queued`, `crawling`, `synthesizing`, `completed`, or `failed`. Progress, errors,
 normalized chapter text, and audio links persist in SQLite. On server restart, queued or interrupted
