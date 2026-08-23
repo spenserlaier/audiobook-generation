@@ -4,15 +4,39 @@ import signal
 import sqlite3
 import subprocess
 import threading
+import time
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .models import Chapter
 
 
 class CrawlCancelled(Exception):
     pass
+
+
+def crawler_progress(
+    state_dir: Path, url: str, limit: int | None = None
+) -> tuple[int, int] | None:
+    database = state_dir / "sqlite.db"
+    if not database.is_file():
+        return None
+    try:
+        with sqlite3.connect(database, timeout=0.1) as db:
+            row = db.execute(
+                """SELECT COUNT(c.id), MIN(n.chapter_count, COALESCE(?, n.chapter_count))
+                   FROM novels n LEFT JOIN chapters c
+                     ON c.novel_id = n.id AND c.is_done = 1
+                    AND (? IS NULL OR c.serial <= ?)
+                   WHERE n.url = ? GROUP BY n.id""",
+                (limit, limit, limit, url),
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+    if row is None:
+        return None
+    return int(row[0] or 0), int(row[1] or 0)
 
 
 def _text(value: Any) -> str:
@@ -109,6 +133,7 @@ def crawl(
     destination: Path,
     limit: int | None,
     cancel_event: threading.Event | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Chapter]:
     destination.mkdir(parents=True, exist_ok=True)
     before = {
@@ -132,6 +157,8 @@ def crawl(
             stderr=subprocess.PIPE,
             start_new_session=True,
         )
+        next_progress_check = 0.0
+        last_progress: tuple[int, int] | None = None
         while True:
             if cancel_event.is_set():
                 try:
@@ -151,6 +178,13 @@ def crawl(
                 stdout, stderr = process.communicate(timeout=0.2)
                 break
             except subprocess.TimeoutExpired:
+                now = time.monotonic()
+                if progress_callback and now >= next_progress_check:
+                    progress = crawler_progress(destination, url, limit)
+                    if progress is not None and progress != last_progress:
+                        progress_callback(*progress)
+                        last_progress = progress
+                    next_progress_check = now + 1
                 continue
         result = subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
     if result.returncode:

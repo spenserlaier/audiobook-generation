@@ -11,6 +11,7 @@ from audiobook.crawler import (
     CrawlCancelled,
     crawl,
     crawler_args,
+    crawler_progress,
     load_persisted_chapters,
     normalize_crawler_archive,
     normalize_crawler_json,
@@ -116,3 +117,20 @@ def test_crawl_can_terminate_a_stalled_process(tmp_path):
     finally:
         timer.cancel()
     assert time.monotonic() - started < 3
+
+
+def test_reads_live_crawler_progress(tmp_path):
+    with sqlite3.connect(tmp_path / "sqlite.db") as db:
+        db.execute("CREATE TABLE novels (id TEXT, url TEXT, chapter_count INTEGER)")
+        db.execute(
+            "CREATE TABLE chapters (id TEXT, novel_id TEXT, serial INTEGER, is_done INTEGER)"
+        )
+        db.execute("INSERT INTO novels VALUES ('novel-1', 'https://example.com/book', 100)")
+        db.executemany(
+            "INSERT INTO chapters VALUES (?, 'novel-1', ?, ?)",
+            [(f"chapter-{index}", index, index <= 92) for index in range(1, 101)],
+        )
+
+    assert crawler_progress(tmp_path, "https://example.com/book") == (92, 100)
+    assert crawler_progress(tmp_path, "https://example.com/book", 3) == (3, 3)
+    assert crawler_progress(tmp_path, "https://example.com/missing") is None

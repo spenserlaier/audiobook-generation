@@ -36,12 +36,24 @@ class Pipeline:
                     for index in range(1, total + 1)
                 ]
             else:
+                def report_crawl_progress(downloaded: int, total: int) -> None:
+                    if cancel_event.is_set():
+                        return
+                    if total:
+                        ratio = min(downloaded / total, 1.0)
+                        stage = f"Crawling novel · {downloaded}/{total} chapters"
+                    else:
+                        ratio = 0
+                        stage = f"Crawling novel · {downloaded} chapters"
+                    self.store.update(job.id, stage=stage, progress=0.02 + 0.07 * ratio)
+
                 chapters = crawl(
                     self.settings.crawler_command,
                     job.novel_url,
                     self.settings.data_dir / "crawler-state",
                     job.chapter_limit,
                     cancel_event,
+                    report_crawl_progress,
                 )
             if cancel_event.is_set():
                 raise CrawlCancelled("Job cancelled")
