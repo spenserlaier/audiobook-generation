@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audiobook Foundry</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <header><p class="eyebrow">LOCAL AUDIO WORKSHOP</p><h1>Audiobook Foundry</h1><p>Turn a supported web novel into chapter-by-chapter audio.</p></header>
+    <section class="panel">
+      <form id="job-form">
+        <label>Novel URL<input id="novel-url" type="url" required placeholder="https://supported-site.example/novel"></label>
+        <div class="row">
+          <label>Title (optional)<input id="title" maxlength="300" placeholder="Use a friendly library title"></label>
+          <label>First chapters<input id="chapter-limit" type="number" min="1" max="10000" value="3"></label>
+        </div>
+        <div class="row">
+          <label>Language<input id="language" value="Auto"></label>
+          <label>Speaker<select id="speaker"><option>Ryan</option><option>Aiden</option><option>Vivian</option><option>Serena</option><option>Uncle_Fu</option><option>Dylan</option><option>Eric</option><option>Ono_Anna</option><option>Sohee</option></select></label>
+        </div>
+        <label>Voice direction<input id="instruction" maxlength="500" placeholder="Calm, measured narration"></label>
+        <div class="actions"><button type="submit">Start audiobook</button><a href="https://github.com/lncrawl/lightnovel-crawler#supported-sources" target="_blank" rel="noreferrer">Browse supported sources ↗</a></div>
+        <p id="form-error" class="error" role="alert"></p>
+      </form>
+    </section>
+    <section><div class="section-title"><h2>Jobs</h2><button class="quiet" id="refresh" type="button">Refresh</button></div><div id="jobs" class="jobs"><p class="empty">No jobs yet.</p></div></section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
