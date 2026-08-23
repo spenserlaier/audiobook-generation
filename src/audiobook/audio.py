@@ -52,10 +52,18 @@ def combine_wavs(parts: list[Path], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(parts[0]), "rb") as first:
         params = first.getparams()
+        encoding = (params.nchannels, params.sampwidth, params.framerate, params.comptype)
     with wave.open(str(output_path), "wb") as target:
         target.setparams(params)
         for part in parts:
             with wave.open(str(part), "rb") as source:
-                if source.getparams()[:4] != params[:4]:
+                source_params = source.getparams()
+                source_encoding = (
+                    source_params.nchannels,
+                    source_params.sampwidth,
+                    source_params.framerate,
+                    source_params.comptype,
+                )
+                if source_encoding != encoding:
                     raise ValueError("Audio chunks use incompatible WAV formats")
                 target.writeframes(source.readframes(source.getnframes()))
