@@ -48,8 +48,8 @@
         <p id="form-error" class="error" role="alert"></p>
       </form>
     </section>
-    <section class="generate-view"><div class="section-title"><h2>Jobs</h2><button class="quiet" id="refresh" type="button">Refresh</button></div><div id="jobs" class="jobs"><p class="empty">No jobs yet.</p></div></section>
-    <section class="storage-view" hidden><div class="section-title"><div><h2>Generated files</h2><p class="hint">Deleting files keeps the job history, but permanently removes its WAVs, voice reference, and ZIP.</p></div><button class="quiet" id="refresh-storage" type="button">Refresh</button></div><div id="storage" class="jobs"><p class="empty">No runs yet.</p></div></section>
+    <section class="generate-view"><div class="section-title"><h2>Jobs</h2><div class="section-actions"><button class="quiet" id="refresh" type="button">Refresh</button><button class="danger" id="clear-jobs" type="button">Clear job list</button></div></div><div id="jobs" class="jobs"><p class="empty">No jobs yet.</p></div></section>
+    <section class="storage-view" hidden><div class="section-title"><div><h2>Generated files</h2><p class="hint">Deleting files keeps the job history, but permanently removes its WAVs, voice reference, and ZIP.</p></div><div class="section-actions"><button class="quiet" id="refresh-storage" type="button">Refresh</button><button class="danger" id="clear-storage" type="button">Clear all artifacts</button></div></div><div id="storage" class="jobs"><p class="empty">No runs yet.</p></div></section>
   </main>
   <script src="/static/app.js"></script>
 </body>

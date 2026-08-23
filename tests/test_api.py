@@ -108,14 +108,21 @@ async def test_reusable_voice_preview_and_job_download(tmp_path):
             entry = next(item for item in storage if item["job_id"] == job_id)
             assert entry["file_count"] >= 3
             assert entry["size_bytes"] > 0
+            page = (
+                await client.get(f"/api/jobs/{job_id}/chapters?offset=1&limit=1")
+            ).json()
+            assert [chapter["index"] for chapter in page] == [2]
 
-            assert (await client.delete(f"/api/jobs/{job_id}")).status_code == 204
+            response = await client.delete("/api/jobs")
+            assert response.status_code == 200
+            assert response.json()["hidden"] == 1
             assert all(item["id"] != job_id for item in (await client.get("/api/jobs")).json())
             storage = (await client.get("/api/storage")).json()
             assert next(item for item in storage if item["job_id"] == job_id)["hidden"] is True
 
-            response = await client.delete(f"/api/storage/jobs/{job_id}")
-            assert response.status_code == 204
+            response = await client.delete("/api/storage")
+            assert response.status_code == 200
+            assert response.json() == {"deleted": 1, "skipped_active": 0}
             assert not (tmp_path / "jobs" / job_id).exists()
             assert (await client.get(f"/api/jobs/{job_id}")).json()["output_dir"] is None
             chapters = (await client.get(f"/api/jobs/{job_id}/chapters")).json()

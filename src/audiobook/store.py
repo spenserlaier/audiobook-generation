@@ -168,6 +168,11 @@ class JobStore:
     def hide(self, job_id: str) -> Job:
         return self.update(job_id, hidden=True)
 
+    def hide_all(self) -> int:
+        with self._connect() as db:
+            cursor = db.execute("UPDATE jobs SET hidden = 1 WHERE hidden = 0")
+        return cursor.rowcount
+
     def clear_output_references(self, job_id: str) -> None:
         with self._connect() as db:
             db.execute(
@@ -199,14 +204,18 @@ class JobStore:
                 [(job_id, c.index, c.title, c.text) for c in chapters],
             )
 
-    def chapters(self, job_id: str) -> list[ChapterRecord]:
+    def chapters(
+        self, job_id: str, offset: int | None = None, limit: int | None = None
+    ) -> list[ChapterRecord]:
         with self._connect() as db:
-            rows = db.execute(
-                """SELECT job_id, chapter_index AS 'index', title, text, status,
-                          audio_url, error FROM chapters WHERE job_id = ?
-                   ORDER BY chapter_index""",
-                (job_id,),
-            ).fetchall()
+            query = """SELECT job_id, chapter_index AS 'index', title, text, status,
+                              audio_url, error FROM chapters WHERE job_id = ?
+                       ORDER BY chapter_index"""
+            parameters: tuple[object, ...] = (job_id,)
+            if limit is not None:
+                query += " LIMIT ? OFFSET ?"
+                parameters = (job_id, limit, offset or 0)
+            rows = db.execute(query, parameters).fetchall()
         return [ChapterRecord.model_validate(dict(row)) for row in rows]
 
     def update_chapter(self, job_id: str, index: int, **values: object) -> None:

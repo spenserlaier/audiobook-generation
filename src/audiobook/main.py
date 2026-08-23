@@ -4,7 +4,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -91,6 +91,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def list_jobs() -> list[Job]:
         return store.list()
 
+    @app.delete("/api/jobs", status_code=status.HTTP_200_OK)
+    async def hide_all_jobs() -> dict[str, int]:
+        return {"hidden": store.hide_all()}
+
     @app.get("/api/jobs/{job_id}", response_model=Job)
     async def get_job(job_id: str) -> Job:
         try:
@@ -106,12 +110,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Job not found") from exc
 
     @app.get("/api/jobs/{job_id}/chapters", response_model=list[ChapterRecord])
-    async def get_chapters(job_id: str) -> list[ChapterRecord]:
+    async def get_chapters(
+        job_id: str,
+        offset: int | None = Query(default=None, ge=0),
+        limit: int | None = Query(default=None, ge=1, le=200),
+    ) -> list[ChapterRecord]:
         try:
             store.get(job_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Job not found") from exc
-        return store.chapters(job_id)
+        return store.chapters(job_id, offset=offset, limit=limit)
 
     @app.get("/api/jobs/{job_id}/chapters/{chapter_index}/audio")
     async def chapter_audio(job_id: str, chapter_index: int) -> StreamingResponse:
@@ -218,6 +226,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if directory.is_dir():
             shutil.rmtree(directory)
         store.clear_output_references(job.id)
+
+    @app.delete("/api/storage", status_code=status.HTTP_200_OK)
+    async def delete_all_job_files() -> dict[str, int]:
+        deleted = 0
+        skipped_active = 0
+        for job in store.list(limit=10_000, include_hidden=True):
+            if job.status in {"queued", "crawling", "synthesizing"}:
+                skipped_active += 1
+                continue
+            directory = settings.data_dir / "jobs" / job.id
+            if directory.is_dir():
+                shutil.rmtree(directory)
+                deleted += 1
+            store.clear_output_references(job.id)
+        return {"deleted": deleted, "skipped_active": skipped_active}
 
     return app
 

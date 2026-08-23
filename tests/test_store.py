@@ -43,3 +43,23 @@ def test_existing_database_gets_voice_design_columns(tmp_path):
     job = store.create(CreateJob(novel_url="https://example.com/new"))
     assert job.synthesis_mode == SynthesisMode.DESIGNED_CLONE
     assert job.voice_description
+
+
+def test_chapters_can_be_paginated_and_jobs_bulk_hidden(tmp_path):
+    store = JobStore(tmp_path / "state.sqlite3")
+    jobs = [
+        store.create(CreateJob(novel_url=f"https://example.com/book-{index}"))
+        for index in range(2)
+    ]
+    store.replace_chapters(
+        jobs[0].id,
+        [Chapter(index=index, title=f"Chapter {index}", text="Text") for index in range(1, 121)],
+    )
+
+    page = store.chapters(jobs[0].id, offset=50, limit=50)
+    assert len(page) == 50
+    assert page[0].index == 51
+    assert page[-1].index == 100
+    assert store.hide_all() == 2
+    assert store.list() == []
+    assert len(store.list(include_hidden=True)) == 2
