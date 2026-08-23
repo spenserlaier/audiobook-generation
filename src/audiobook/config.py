@@ -6,7 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     data_dir: Path = Path("data")
     crawler_command: str = "lncrawl"
-    tts_model: str = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+    tts_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+    voice_design_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+    voice_clone_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
     tts_device: str = "cuda:0"
     tts_dtype: str = "bfloat16"
     tts_attention: str = "flash_attention_2"

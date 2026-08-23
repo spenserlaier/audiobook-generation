@@ -4,7 +4,7 @@ import threading
 from .audio import write_mock_wav
 from .config import Settings
 from .crawler import crawl
-from .models import Chapter, JobStatus
+from .models import Chapter, JobStatus, SynthesisMode
 from .store import JobStore
 from .tts import QwenSynthesizer
 
@@ -51,13 +51,38 @@ class Pipeline:
                 chapters_completed=0,
                 output_dir=str(job_dir / "audio"),
             )
+            clone_prompt = None
+            if job.synthesis_mode == SynthesisMode.DESIGNED_CLONE:
+                reference_audio = job_dir / "voice-reference.wav"
+                self.store.update(
+                    job.id,
+                    stage="Designing narrative voice",
+                )
+                if self.settings.mock_pipeline:
+                    write_mock_wav(reference_audio, job.reference_text)
+                else:
+                    self.tts.design_voice(
+                        job.reference_text,
+                        job.voice_description,
+                        job.language,
+                        reference_audio,
+                    )
+                    # Loading Base releases VoiceDesign and its CUDA allocation first.
+                    clone_prompt = self.tts.create_clone_prompt(reference_audio, job.reference_text)
+                self.store.update(
+                    job.id,
+                    voice_preview_url=f"/api/jobs/{job.id}/voice-preview",
+                    stage="Narrative voice ready",
+                )
             for completed, chapter in enumerate(chapters, 1):
                 output = job_dir / "audio" / f"chapter-{chapter.index:04d}.wav"
                 self.store.update_chapter(job.id, chapter.index, status="synthesizing", error=None)
                 if self.settings.mock_pipeline:
                     write_mock_wav(output, chapter.text)
+                elif job.synthesis_mode == SynthesisMode.DESIGNED_CLONE:
+                    self.tts.synthesize_clone(chapter.text, output, job.language, clone_prompt)
                 else:
-                    self.tts.synthesize(
+                    self.tts.synthesize_custom(
                         chapter.text, output, job.language, job.speaker, job.voice_instruction
                     )
                 audio_url = f"/api/jobs/{job.id}/chapters/{chapter.index}/audio"

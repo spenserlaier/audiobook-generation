@@ -18,9 +18,19 @@
         </div>
         <div class="row">
           <label>Language<input id="language" value="Auto"></label>
-          <label>Speaker<select id="speaker"><option>Ryan</option><option>Aiden</option><option>Vivian</option><option>Serena</option><option>Uncle_Fu</option><option>Dylan</option><option>Eric</option><option>Ono_Anna</option><option>Sohee</option></select></label>
+          <label>Voice workflow<select id="synthesis-mode"><option value="designed_clone">Design + clone (recommended)</option><option value="custom_voice">Built-in Qwen voice</option></select></label>
         </div>
-        <label>Voice direction<input id="instruction" maxlength="500" placeholder="Calm, measured narration"></label>
+        <div id="designed-voice-fields">
+          <label>Narrative voice description<textarea id="voice-description" maxlength="1000" rows="4">A compelling, warm audiobook narrator with a clear mid-low register, measured pacing, subtle emotional range, crisp diction, and an intimate storytelling tone.</textarea></label>
+          <label>Reference script<textarea id="reference-text" maxlength="1000" rows="3">The road disappeared into the evening mist, and with every quiet step, the old world fell farther behind. Ahead waited a story no one had dared to tell.</textarea></label>
+          <p class="hint">VoiceDesign reads this short script, then the Base model clones that result consistently across every chapter.</p>
+        </div>
+        <div id="custom-voice-fields" hidden>
+          <div class="row">
+            <label>Speaker<select id="speaker"><option>Ryan</option><option>Aiden</option><option>Vivian</option><option>Serena</option><option>Uncle_Fu</option><option>Dylan</option><option>Eric</option><option>Ono_Anna</option><option>Sohee</option></select></label>
+            <label>Voice direction<input id="instruction" maxlength="500" placeholder="Calm, measured narration"></label>
+          </div>
+        </div>
         <div class="actions"><button type="submit">Start audiobook</button><a href="https://github.com/lncrawl/lightnovel-crawler#supported-sources" target="_blank" rel="noreferrer">Browse supported sources ↗</a></div>
         <p id="form-error" class="error" role="alert"></p>
       </form>

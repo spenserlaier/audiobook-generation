@@ -12,6 +12,11 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
+class SynthesisMode(StrEnum):
+    DESIGNED_CLONE = "designed_clone"
+    CUSTOM_VOICE = "custom_voice"
+
+
 class CreateJob(BaseModel):
     novel_url: HttpUrl
     title: str | None = Field(default=None, max_length=300)
@@ -19,6 +24,23 @@ class CreateJob(BaseModel):
     language: str = Field(default="Auto", max_length=40)
     speaker: str = Field(default="Ryan", max_length=80)
     voice_instruction: str = Field(default="", max_length=500)
+    synthesis_mode: SynthesisMode = SynthesisMode.DESIGNED_CLONE
+    voice_description: str = Field(
+        default=(
+            "A compelling, warm audiobook narrator with a clear mid-low register, measured "
+            "pacing, subtle emotional range, crisp diction, and an intimate storytelling tone."
+        ),
+        min_length=1,
+        max_length=1000,
+    )
+    reference_text: str = Field(
+        default=(
+            "The road disappeared into the evening mist, and with every quiet step, the old "
+            "world fell farther behind. Ahead waited a story no one had dared to tell."
+        ),
+        min_length=1,
+        max_length=1000,
+    )
 
 
 class Chapter(BaseModel):
@@ -42,6 +64,10 @@ class Job(BaseModel):
     language: str
     speaker: str
     voice_instruction: str
+    synthesis_mode: SynthesisMode
+    voice_description: str
+    reference_text: str
+    voice_preview_url: str | None
     status: JobStatus
     stage: str
     progress: float

@@ -34,6 +34,10 @@ async def test_mock_job_completes_and_serves_audio(tmp_path):
                 await asyncio.sleep(0.02)
             assert job["status"] == "completed", job
             assert job["chapters_completed"] == 2
+            assert job["synthesis_mode"] == "designed_clone"
+            assert job["voice_preview_url"].endswith("/voice-preview")
+            reference = tmp_path / "jobs" / job_id / "voice-reference.wav"
+            assert reference.read_bytes().startswith(b"RIFF")
 
             chapters = (await client.get(f"/api/jobs/{job_id}/chapters")).json()
             assert len(chapters) == 2

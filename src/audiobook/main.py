@@ -77,6 +77,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Chapter audio file is missing")
         return FileResponse(path, media_type="audio/wav", filename=path.name)
 
+    @app.get("/api/jobs/{job_id}/voice-preview")
+    async def voice_preview(job_id: str) -> FileResponse:
+        try:
+            job = store.get(job_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Job not found") from exc
+        path = settings.data_dir / "jobs" / job.id / "voice-reference.wav"
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="Voice preview is not ready")
+        return FileResponse(path, media_type="audio/wav", filename="voice-reference.wav")
+
     return app
 
 

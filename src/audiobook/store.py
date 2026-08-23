@@ -32,6 +32,16 @@ class JobStore:
                     created_at TEXT NOT NULL, updated_at TEXT NOT NULL
                 )
             """)
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
+            migrations = {
+                "synthesis_mode": "TEXT NOT NULL DEFAULT 'designed_clone'",
+                "voice_description": "TEXT NOT NULL DEFAULT ''",
+                "reference_text": "TEXT NOT NULL DEFAULT ''",
+                "voice_preview_url": "TEXT",
+            }
+            for name, definition in migrations.items():
+                if name not in columns:
+                    db.execute(f"ALTER TABLE jobs ADD COLUMN {name} {definition}")
             db.execute("""
                 CREATE TABLE IF NOT EXISTS chapters (
                     job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -46,7 +56,12 @@ class JobStore:
         job_id = uuid.uuid4().hex
         with self._connect() as db:
             db.execute(
-                """INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO jobs (
+                       id, novel_url, title, chapter_limit, language, speaker,
+                       voice_instruction, status, stage, progress, chapters_total,
+                       chapters_completed, error, output_dir, created_at, updated_at,
+                       synthesis_mode, voice_description, reference_text, voice_preview_url
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     job_id,
                     str(request.novel_url),
@@ -64,6 +79,10 @@ class JobStore:
                     None,
                     now,
                     now,
+                    request.synthesis_mode,
+                    request.voice_description,
+                    request.reference_text,
+                    None,
                 ),
             )
         return self.get(job_id)

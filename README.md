@@ -2,7 +2,7 @@
 
 A local, UI-driven service that crawls novels supported by
 [lightnovel-crawler](https://github.com/lncrawl/lightnovel-crawler), stores chapter text and
-job progress in SQLite, and renders chapter WAV files with
+job progress in SQLite, designs a reusable narrative voice, and renders chapter WAV files with
 [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS).
 
 ## Quick start (mock mode)
@@ -34,8 +34,13 @@ with JSON output, normalizes the resulting chapters, and synthesizes bounded tex
 `Qwen3TTSModel` only when synthesis begins, so the normal API and tests do not import PyTorch or
 download weights. Temporary chunk WAVs are joined into one WAV per chapter.
 
-The default model is the 0.6B CustomVoice checkpoint. A CUDA GPU is strongly recommended. The first
-real job downloads model weights. FlashAttention 2 is the default attention implementation and
+The default workflow targets an RTX 4090: the 1.7B VoiceDesign checkpoint generates a short voice
+reference, then the 1.7B Base checkpoint clones it for every chapter. VoiceDesign is released from
+memory before Base is loaded so the checkpoints do not occupy VRAM together. The generated reference
+is playable in the job UI. The optional built-in-voice workflow uses the 1.7B CustomVoice checkpoint.
+
+A CUDA GPU is strongly recommended. The first real job downloads the selected model weights.
+FlashAttention 2 is the default attention implementation and
 requires compatible CUDA hardware plus `float16` or `bfloat16`; set the attention option to an empty
 string to use the model's default implementation.
 
@@ -47,7 +52,9 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | --- | --- | --- |
 | `AUDIOBOOK_DATA_DIR` | `data` | SQLite, crawl artifacts, and chapter audio |
 | `AUDIOBOOK_CRAWLER_COMMAND` | `lncrawl` | Crawler executable |
-| `AUDIOBOOK_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice` | Model ID or local path |
+| `AUDIOBOOK_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | Optional built-in voice model |
+| `AUDIOBOOK_VOICE_DESIGN_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` | Narrative voice design model |
+| `AUDIOBOOK_VOICE_CLONE_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Designed-voice cloning model |
 | `AUDIOBOOK_TTS_DEVICE` | `cuda:0` | PyTorch device map |
 | `AUDIOBOOK_TTS_DTYPE` | `bfloat16` | PyTorch dtype name |
 | `AUDIOBOOK_TTS_ATTENTION` | `flash_attention_2` | Attention implementation |
