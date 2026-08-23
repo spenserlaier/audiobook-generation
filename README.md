@@ -30,9 +30,10 @@ audiobook-server
 ```
 
 Enter a novel URL from a source supported by lightnovel-crawler. The worker runs its noninteractive
-CLI with JSON output, normalizes the resulting chapters, and synthesizes bounded text chunks. The crawler
-dependency is pinned to the database-free 3.9.x CLI because the 4.14.0 SQLite migration emits an
-invalid parameterized column default. It loads
+CLI with JSON output, normalizes the resulting chapters, and synthesizes bounded text chunks. A narrow
+project-owned launcher corrects a 4.14 SQLite migration default before delegating to the official CLI;
+it does not modify the installed package or user-level crawler database. Crawler state and its source
+cache live under `AUDIOBOOK_DATA_DIR/crawler-state`. It loads
 `Qwen3TTSModel` only when synthesis begins, so the normal API and tests do not import PyTorch or
 download weights. Temporary chunk WAVs are joined into one WAV per chapter.
 
@@ -53,7 +54,7 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AUDIOBOOK_DATA_DIR` | `data` | SQLite, crawl artifacts, and chapter audio |
-| `AUDIOBOOK_CRAWLER_COMMAND` | `lncrawl` | Crawler executable |
+| `AUDIOBOOK_CRAWLER_COMMAND` | `audiobook-lncrawl` | Crawler compatibility launcher |
 | `AUDIOBOOK_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | Optional built-in voice model |
 | `AUDIOBOOK_VOICE_DESIGN_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` | Narrative voice design model |
 | `AUDIOBOOK_VOICE_CLONE_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Designed-voice cloning model |

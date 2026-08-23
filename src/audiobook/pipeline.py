@@ -36,7 +36,7 @@ class Pipeline:
                 chapters = crawl(
                     self.settings.crawler_command,
                     job.novel_url,
-                    job_dir / "crawl",
+                    self.settings.data_dir / "crawler-state",
                     job.chapter_limit,
                 )
             self.store.replace_chapters(job.id, chapters)

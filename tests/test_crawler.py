@@ -1,6 +1,9 @@
+import json
+from types import SimpleNamespace
+
 import pytest
 
-from audiobook.crawler import crawler_args, normalize_crawler_json
+from audiobook.crawler import crawl, crawler_args, normalize_crawler_json
 
 
 def test_normalizes_flat_chapters_and_paragraphs():
@@ -25,10 +28,32 @@ def test_rejects_empty_payload():
         normalize_crawler_json({"chapters": []})
 
 
-def test_builds_noninteractive_v3_cli_arguments(tmp_path):
-    args = crawler_args("lncrawl", "https://example.com/book", tmp_path, 4)
-    assert args[:3] == ["lncrawl", "--source", "https://example.com/book"]
+def test_builds_noninteractive_v4_cli_arguments(tmp_path):
+    args = crawler_args("audiobook-lncrawl", "https://example.com/book", 4)
+    assert args[:4] == [
+        "audiobook-lncrawl",
+        "crawl",
+        "https://example.com/book",
+        "--format",
+    ]
     assert args[args.index("--format") + 1] == "json"
-    assert args[args.index("--output") + 1] == str(tmp_path)
     assert args[-2:] == ["--first", "4"]
-    assert "--suppress" in args
+    assert "--noin" in args
+
+
+def test_crawl_uses_project_state_and_new_json(monkeypatch, tmp_path):
+    (tmp_path / "stale.json").write_text('{"chapters": []}')
+    invocation = {}
+
+    def fake_run(args, **kwargs):
+        invocation.update(args=args, **kwargs)
+        (tmp_path / "artifact.json").write_text(
+            json.dumps({"chapters": [{"title": "Fresh", "body": "New text"}]})
+        )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("audiobook.crawler.subprocess.run", fake_run)
+    chapters = crawl("audiobook-lncrawl", "https://example.com/book", tmp_path, 1)
+
+    assert chapters[0].title == "Fresh"
+    assert invocation["env"]["LNCRAWL_DATA_PATH"] == str(tmp_path.resolve())

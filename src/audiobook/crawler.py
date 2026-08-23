@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -46,31 +47,37 @@ def normalize_crawler_json(payload: Any) -> list[Chapter]:
     return chapters
 
 
-def crawler_args(command: str, url: str, destination: Path, limit: int | None) -> list[str]:
-    """Build arguments for the pinned, database-free lightnovel-crawler 3.x CLI."""
-    args = [
-        command,
-        "--source",
-        url,
-        "--format",
-        "json",
-        "--output",
-        str(destination),
-        "--suppress",
-        "--close-directly",
-    ]
+def crawler_args(command: str, url: str, limit: int | None) -> list[str]:
+    """Build arguments for the lightnovel-crawler 4.x CLI."""
+    args = [command, "crawl", url, "--format", "json", "--noin"]
     args += ["--first", str(limit)] if limit else ["--all"]
     return args
 
 
 def crawl(command: str, url: str, destination: Path, limit: int | None) -> list[Chapter]:
     destination.mkdir(parents=True, exist_ok=True)
-    args = crawler_args(command, url, destination, limit)
-    result = subprocess.run(args, cwd=destination, text=True, capture_output=True, timeout=3600)
+    before = {
+        path: (path.stat().st_mtime_ns, path.stat().st_size) for path in destination.rglob("*.json")
+    }
+    args = crawler_args(command, url, limit)
+    environment = {**os.environ, "LNCRAWL_DATA_PATH": str(destination.resolve())}
+    result = subprocess.run(
+        args,
+        cwd=destination,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=3600,
+    )
     if result.returncode:
         detail = (result.stderr or result.stdout).strip()[-2000:]
         raise RuntimeError(f"lightnovel-crawler failed ({result.returncode}): {detail}")
-    files = sorted(destination.rglob("*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+    files = [
+        path
+        for path in destination.rglob("*.json")
+        if before.get(path) != (path.stat().st_mtime_ns, path.stat().st_size)
+    ]
+    files.sort(key=lambda path: path.stat().st_mtime_ns, reverse=True)
     errors: list[str] = []
     for path in files:
         try:
