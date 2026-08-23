@@ -4,6 +4,10 @@ from pydantic import ValidationError
 from audiobook.config import Settings
 
 
+def test_faster_backend_is_default(tmp_path):
+    assert Settings(data_dir=tmp_path).tts_backend == "faster"
+
+
 def test_real_gpu_pipeline_rejects_multiple_workers():
     with pytest.raises(ValidationError, match="WORKER_COUNT=1"):
         Settings(worker_count=2)
