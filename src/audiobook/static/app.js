@@ -52,10 +52,16 @@ async function refreshStorage() {
 document.querySelector('#job-form').addEventListener('submit', async event => {
   event.preventDefault(); const error = document.querySelector('#form-error'); error.textContent = '';
   const limit = document.querySelector('#chapter-limit').value;
-  const body = { novel_url:document.querySelector('#novel-url').value, title:document.querySelector('#title').value || null, chapter_limit:limit ? Number(limit) : null, language:document.querySelector('#language').value, synthesis_mode:document.querySelector('#synthesis-mode').value, voice_id:document.querySelector('#voice-id').value || null, voice_description:document.querySelector('#voice-description').value, reference_text:document.querySelector('#reference-text').value, speaker:document.querySelector('#speaker').value, voice_instruction:document.querySelector('#instruction').value };
+  const chapterLimit = document.querySelector('#chapter-scope').value === 'all' ? null : Number(limit);
+  const body = { novel_url:document.querySelector('#novel-url').value, title:document.querySelector('#title').value || null, chapter_limit:chapterLimit, language:document.querySelector('#language').value, synthesis_mode:document.querySelector('#synthesis-mode').value, voice_id:document.querySelector('#voice-id').value || null, voice_description:document.querySelector('#voice-description').value, reference_text:document.querySelector('#reference-text').value, speaker:document.querySelector('#speaker').value, voice_instruction:document.querySelector('#instruction').value };
   const response = await fetch('/api/jobs', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body)});
   if (!response.ok) { const detail = await response.json(); error.textContent = JSON.stringify(detail.detail); return; }
-  event.target.reset(); document.querySelector('#chapter-limit').value = 3; document.querySelector('#language').value = 'Auto'; await refresh();
+  event.target.reset(); document.querySelector('#chapter-limit').value = 3; document.querySelector('#chapter-limit-field').hidden = false; document.querySelector('#language').value = 'Auto'; await refresh();
+});
+document.querySelector('#chapter-scope').addEventListener('change', event => {
+  const limited = event.target.value === 'first';
+  document.querySelector('#chapter-limit-field').hidden = !limited;
+  document.querySelector('#chapter-limit').required = limited;
 });
 document.querySelector('#refresh').addEventListener('click', refresh);
 document.querySelector('#refresh-storage').addEventListener('click', refreshStorage);

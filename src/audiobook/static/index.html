@@ -26,8 +26,9 @@
         <label>Novel URL<input id="novel-url" type="url" required placeholder="https://supported-site.example/novel"></label>
         <div class="row">
           <label>Title (optional)<input id="title" maxlength="300" placeholder="Use a friendly library title"></label>
-          <label>First chapters<input id="chapter-limit" type="number" min="1" max="10000" value="3"></label>
+          <label>Chapter scope<select id="chapter-scope"><option value="first">First N chapters</option><option value="all">All chapters</option></select></label>
         </div>
+        <label id="chapter-limit-field">Number of chapters<input id="chapter-limit" type="number" min="1" max="10000" value="3" required></label>
         <div class="row">
           <label>Language<input id="language" value="Auto"></label>
           <label>Voice workflow<select id="synthesis-mode"><option value="designed_clone">Design + clone (recommended)</option><option value="custom_voice">Built-in Qwen voice</option></select></label>
