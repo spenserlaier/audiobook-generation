@@ -46,10 +46,26 @@ def normalize_crawler_json(payload: Any) -> list[Chapter]:
     return chapters
 
 
+def crawler_args(command: str, url: str, destination: Path, limit: int | None) -> list[str]:
+    """Build arguments for the pinned, database-free lightnovel-crawler 3.x CLI."""
+    args = [
+        command,
+        "--source",
+        url,
+        "--format",
+        "json",
+        "--output",
+        str(destination),
+        "--suppress",
+        "--close-directly",
+    ]
+    args += ["--first", str(limit)] if limit else ["--all"]
+    return args
+
+
 def crawl(command: str, url: str, destination: Path, limit: int | None) -> list[Chapter]:
     destination.mkdir(parents=True, exist_ok=True)
-    args = [command, "crawl", url, "-f", "json"]
-    args += ["--first", str(limit)] if limit else ["--all"]
+    args = crawler_args(command, url, destination, limit)
     result = subprocess.run(args, cwd=destination, text=True, capture_output=True, timeout=3600)
     if result.returncode:
         detail = (result.stderr or result.stdout).strip()[-2000:]

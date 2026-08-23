@@ -29,8 +29,10 @@ pip install -e '.[crawler,tts]'
 audiobook-server
 ```
 
-Enter a novel URL from a source supported by lightnovel-crawler. The worker runs `lncrawl crawl`
-with JSON output, normalizes the resulting chapters, and synthesizes bounded text chunks. It loads
+Enter a novel URL from a source supported by lightnovel-crawler. The worker runs its noninteractive
+CLI with JSON output, normalizes the resulting chapters, and synthesizes bounded text chunks. The crawler
+dependency is pinned to the database-free 3.9.x CLI because the 4.14.0 SQLite migration emits an
+invalid parameterized column default. It loads
 `Qwen3TTSModel` only when synthesis begins, so the normal API and tests do not import PyTorch or
 download weights. Temporary chunk WAVs are joined into one WAV per chapter.
 

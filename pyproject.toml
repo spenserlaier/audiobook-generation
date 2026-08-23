@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-crawler = ["lightnovel-crawler>=3.7"]
+crawler = ["lightnovel-crawler>=3.9.4,<4"]
 tts = ["qwen-tts>=0.1", "soundfile>=0.12"]
 dev = ["httpx>=0.27", "pytest>=8.0", "ruff>=0.8"]
 
