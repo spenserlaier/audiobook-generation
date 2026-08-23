@@ -97,7 +97,9 @@ The UI can generate reusable narrator previews before a novel is submitted. Comp
 be played or downloaded individually, and completed jobs provide a ZIP containing every WAV.
 Jobs can be hidden from the main list without affecting their files. The separate Storage view shows
 disk usage per run and can permanently remove its generated WAV, voice-reference, and ZIP files while
-retaining the job history in SQLite.
+retaining the job history in SQLite. Bulk controls clear the job list or all finished-run artifacts;
+active generation is never cancelled or deleted. Chapter lists start collapsed and fetch 50 records
+at a time when expanded, keeping large libraries responsive.
 
 Jobs move through `queued`, `crawling`, `synthesizing`, `completed`, or `failed`. Progress, errors,
 normalized chapter text, and audio links persist in SQLite. On server restart, queued or interrupted
