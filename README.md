@@ -101,6 +101,8 @@ disk usage per run and can permanently remove its generated WAV, voice-reference
 retaining the job history in SQLite. Bulk controls clear the job list or all finished-run artifacts;
 active generation is never cancelled or deleted. Chapter lists start collapsed and fetch 50 records
 at a time when expanded, keeping large libraries responsive.
+While the crawler is running, the job stage reports downloaded and discovered chapter counts from
+the crawler's persisted state instead of remaining at an unexplained fixed percentage.
 
 Active jobs have a Cancel control. Cancelling a crawl terminates its crawler process; synthesis stops
 between chapters. Clear queue cancels all jobs still waiting for the worker. If the server stops during
