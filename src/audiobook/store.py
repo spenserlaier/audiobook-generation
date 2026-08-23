@@ -6,7 +6,16 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
-from .models import Chapter, ChapterRecord, CreateJob, Job, JobStatus
+from .models import (
+    Chapter,
+    ChapterRecord,
+    CreateJob,
+    CreateVoice,
+    Job,
+    JobStatus,
+    Voice,
+    VoiceStatus,
+)
 
 
 class JobStore:
@@ -38,6 +47,7 @@ class JobStore:
                 "voice_description": "TEXT NOT NULL DEFAULT ''",
                 "reference_text": "TEXT NOT NULL DEFAULT ''",
                 "voice_preview_url": "TEXT",
+                "voice_id": "TEXT",
             }
             for name, definition in migrations.items():
                 if name not in columns:
@@ -50,6 +60,14 @@ class JobStore:
                     PRIMARY KEY (job_id, chapter_index)
                 )
             """)
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS voices (
+                    id TEXT PRIMARY KEY, name TEXT NOT NULL, language TEXT NOT NULL,
+                    description TEXT NOT NULL, reference_text TEXT NOT NULL,
+                    status TEXT NOT NULL, preview_url TEXT, error TEXT,
+                    created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+                )
+            """)
 
     def create(self, request: CreateJob) -> Job:
         now = datetime.now(UTC).isoformat()
@@ -60,8 +78,9 @@ class JobStore:
                        id, novel_url, title, chapter_limit, language, speaker,
                        voice_instruction, status, stage, progress, chapters_total,
                        chapters_completed, error, output_dir, created_at, updated_at,
-                       synthesis_mode, voice_description, reference_text, voice_preview_url
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       synthesis_mode, voice_description, reference_text,
+                       voice_preview_url, voice_id
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     job_id,
                     str(request.novel_url),
@@ -83,9 +102,47 @@ class JobStore:
                     request.voice_description,
                     request.reference_text,
                     None,
+                    request.voice_id,
                 ),
             )
         return self.get(job_id)
+
+    def create_voice(self, request: CreateVoice) -> Voice:
+        now = datetime.now(UTC).isoformat()
+        voice_id = uuid.uuid4().hex
+        with self._connect() as db:
+            db.execute(
+                """INSERT INTO voices (id, name, language, description, reference_text,
+                   status, preview_url, error, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (voice_id, request.name, request.language, request.description,
+                 request.reference_text, VoiceStatus.QUEUED, None, None, now, now),
+            )
+        return self.get_voice(voice_id)
+
+    def get_voice(self, voice_id: str) -> Voice:
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM voices WHERE id = ?", (voice_id,)).fetchone()
+        if row is None:
+            raise KeyError(voice_id)
+        return Voice.model_validate(dict(row))
+
+    def list_voices(self, limit: int = 100) -> list[Voice]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT * FROM voices ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [Voice.model_validate(dict(row)) for row in rows]
+
+    def update_voice(self, voice_id: str, **values: object) -> Voice:
+        allowed = set(Voice.model_fields) - {"id", "created_at", "updated_at"}
+        values = {key: value for key, value in values.items() if key in allowed}
+        values["updated_at"] = datetime.now(UTC).isoformat()
+        assignments = ", ".join(f"{key} = ?" for key in values)
+        normalized = [v.value if isinstance(v, StrEnum) else v for v in values.values()]
+        with self._connect() as db:
+            db.execute(f"UPDATE voices SET {assignments} WHERE id = ?", (*normalized, voice_id))
+        return self.get_voice(voice_id)
 
     def get(self, job_id: str) -> Job:
         with self._connect() as db:
@@ -156,5 +213,17 @@ class JobStore:
                     JobStatus.CRAWLING,
                     JobStatus.SYNTHESIZING,
                 ),
+            )
+        return [row["id"] for row in rows]
+
+    def recover_interrupted_voices(self) -> list[str]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT id FROM voices WHERE status IN (?, ?)",
+                (VoiceStatus.QUEUED, VoiceStatus.GENERATING),
+            ).fetchall()
+            db.execute(
+                "UPDATE voices SET status = ? WHERE status = ?",
+                (VoiceStatus.QUEUED, VoiceStatus.GENERATING),
             )
         return [row["id"] for row in rows]

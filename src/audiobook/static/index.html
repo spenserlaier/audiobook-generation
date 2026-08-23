@@ -10,6 +10,17 @@
   <main>
     <header><p class="eyebrow">LOCAL AUDIO WORKSHOP</p><h1>Audiobook Foundry</h1><p>Turn a supported web novel into chapter-by-chapter audio.</p></header>
     <section class="panel">
+      <div class="section-heading"><div><h2>Design a narrator</h2><p class="hint">Generate and audition a reusable voice before choosing a novel.</p></div></div>
+      <form id="voice-form">
+        <div class="row"><label>Voice name<input id="voice-name" maxlength="120" value="Narrator" required></label><label>Language<input id="voice-language" value="Auto"></label></div>
+        <label>Voice description<textarea id="new-voice-description" maxlength="1000" rows="4">A compelling, warm audiobook narrator with a clear mid-low register, measured pacing, subtle emotional range, crisp diction, and an intimate storytelling tone.</textarea></label>
+        <label>Preview script<textarea id="new-reference-text" maxlength="1000" rows="3">The road disappeared into the evening mist, and with every quiet step, the old world fell farther behind. Ahead waited a story no one had dared to tell.</textarea></label>
+        <div class="actions"><button type="submit">Generate voice preview</button></div>
+        <p id="voice-error" class="error" role="alert"></p>
+      </form>
+      <div id="voices" class="voices"><p class="empty">No saved voices yet.</p></div>
+    </section>
+    <section class="panel">
       <form id="job-form">
         <label>Novel URL<input id="novel-url" type="url" required placeholder="https://supported-site.example/novel"></label>
         <div class="row">
@@ -21,6 +32,7 @@
           <label>Voice workflow<select id="synthesis-mode"><option value="designed_clone">Design + clone (recommended)</option><option value="custom_voice">Built-in Qwen voice</option></select></label>
         </div>
         <div id="designed-voice-fields">
+          <label>Saved narrator<select id="voice-id"><option value="">Create a new voice for this job</option></select></label>
           <label>Narrative voice description<textarea id="voice-description" maxlength="1000" rows="4">A compelling, warm audiobook narrator with a clear mid-low register, measured pacing, subtle emotional range, crisp diction, and an intimate storytelling tone.</textarea></label>
           <label>Reference script<textarea id="reference-text" maxlength="1000" rows="3">The road disappeared into the evening mist, and with every quiet step, the old world fell farther behind. Ahead waited a story no one had dared to tell.</textarea></label>
           <p class="hint">VoiceDesign reads this short script, then the Base model clones that result consistently across every chapter.</p>
