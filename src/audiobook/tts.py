@@ -28,10 +28,26 @@ class QwenSynthesizer:
         try:
             import soundfile as sf
             import torch
-            from qwen_tts import Qwen3TTSModel
         except ImportError as exc:
-            raise RuntimeError("Install the 'tts' extra to enable Qwen3-TTS") from exc
-        return torch, sf, Qwen3TTSModel
+            raise RuntimeError("Install a TTS extra to enable Qwen3-TTS") from exc
+
+        if self.settings.tts_backend == "faster":
+            try:
+                from faster_qwen3_tts import FasterQwen3TTS
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Install the 'tts-faster' extra to use the faster TTS backend"
+                ) from exc
+            model_class = FasterQwen3TTS
+        else:
+            try:
+                from qwen_tts import Qwen3TTSModel
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Install the 'tts' extra to use the official TTS backend"
+                ) from exc
+            model_class = Qwen3TTSModel
+        return torch, sf, model_class
 
     def _load(self, model_id: str) -> Any:
         if self._model_id == model_id and self._model is not None:
@@ -41,17 +57,29 @@ class QwenSynthesizer:
         dtype = getattr(torch, self.settings.tts_dtype, None)
         if dtype is None:
             raise ValueError(f"Unsupported torch dtype: {self.settings.tts_dtype}")
-        kwargs: dict[str, Any] = {"device_map": self.settings.tts_device, "dtype": dtype}
-        attention = resolve_attention(self.settings.tts_attention)
-        if attention:
-            kwargs["attn_implementation"] = attention
+        if self.settings.tts_backend == "faster":
+            if not torch.cuda.is_available():
+                raise RuntimeError("The faster TTS backend requires an available CUDA GPU")
+            kwargs: dict[str, Any] = {
+                "device": self.settings.tts_device,
+                "dtype": dtype,
+                "attn_implementation": "sdpa",
+                "max_seq_len": self.settings.tts_max_seq_len,
+            }
+        else:
+            kwargs = {"device_map": self.settings.tts_device, "dtype": dtype}
+            attention = resolve_attention(self.settings.tts_attention)
+            if attention:
+                kwargs["attn_implementation"] = attention
         self._model = model_class.from_pretrained(model_id, **kwargs)
         self._model_id = model_id
         return self._model
 
     def release(self) -> None:
+        model = self._model
         self._model = None
         self._model_id = None
+        del model
         gc.collect()
         try:
             import torch
@@ -67,16 +95,23 @@ class QwenSynthesizer:
         _, sf, _ = self._dependencies()
         model = self._load(self.settings.voice_design_model)
         wavs, sample_rate = model.generate_voice_design(
-            text=reference_text, language=language, instruct=description
+            text=reference_text,
+            language=language,
+            instruct=description,
+            **self._generation_options(),
         )
         output.parent.mkdir(parents=True, exist_ok=True)
         sf.write(output, wavs[0], sample_rate)
 
     def create_clone_prompt(self, reference_audio: Path, reference_text: str) -> Any:
         model = self._load(self.settings.voice_clone_model)
-        return model.create_voice_clone_prompt(
+        prompt_model = model.model if self.settings.tts_backend == "faster" else model
+        return prompt_model.create_voice_clone_prompt(
             ref_audio=str(reference_audio), ref_text=reference_text, x_vector_only_mode=False
         )
+
+    def _generation_options(self) -> dict[str, int]:
+        return {"max_new_tokens": self.settings.tts_max_new_tokens}
 
     def synthesize_clone(
         self, text: str, output: Path, language: str, voice_clone_prompt: Any
@@ -87,7 +122,10 @@ class QwenSynthesizer:
         parts: list[Path] = []
         for index, chunk in enumerate(split_text(text, self.settings.chunk_chars), 1):
             wavs, sample_rate = model.generate_voice_clone(
-                text=chunk, language=language, voice_clone_prompt=voice_clone_prompt
+                text=chunk,
+                language=language,
+                voice_clone_prompt=voice_clone_prompt,
+                **self._generation_options(),
             )
             part = output.parent / f".{output.stem}.part-{index:04d}.wav"
             sf.write(part, wavs[0], sample_rate)
@@ -108,7 +146,11 @@ class QwenSynthesizer:
         parts: list[Path] = []
         for index, chunk in enumerate(split_text(text, self.settings.chunk_chars), 1):
             wavs, sample_rate = model.generate_custom_voice(
-                text=chunk, language=language, speaker=speaker, instruct=instruction
+                text=chunk,
+                language=language,
+                speaker=speaker,
+                instruct=instruction,
+                **self._generation_options(),
             )
             part = output.parent / f".{output.stem}.part-{index:04d}.wav"
             sf.write(part, wavs[0], sample_rate)

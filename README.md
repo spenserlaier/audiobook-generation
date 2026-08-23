@@ -29,6 +29,18 @@ pip install -e '.[crawler,tts]'
 audiobook-server
 ```
 
+For the CUDA-graph backend, install its separate extra and select it explicitly:
+
+```bash
+pip install -e '.[crawler,tts-faster]'
+AUDIOBOOK_TTS_BACKEND=faster audiobook-server
+```
+
+`faster-qwen3-tts` is pinned to 0.3.2 so upgrades cannot silently change its CUDA graph or prompt
+behavior. It requires PyTorch 2.5.1 or newer and an NVIDIA CUDA GPU. Use Python 3.11 or 3.12 for
+the GPU environment; these are the versions advertised by the package and avoid relying on the
+project's current Python 3.14 compatibility by accident.
+
 Enter a novel URL from a source supported by lightnovel-crawler. The worker runs its noninteractive
 CLI with JSON output, normalizes the resulting chapters, and synthesizes bounded text chunks. A narrow
 project-owned launcher corrects a 4.14 SQLite migration default before delegating to the official CLI;
@@ -48,6 +60,17 @@ otherwise PyTorch SDPA is used. SDPA works on the RTX 4090 without compiling an 
 extension. An explicit `flash_attention_2` setting requires a compatible `flash-attn` installation
 plus `float16` or `bfloat16`.
 
+The `faster` backend uses SDPA with a fixed-size CUDA-graph cache; `AUDIOBOOK_TTS_ATTENTION` does not
+apply to it. Its model is released after every job by default to return VRAM to the desktop. Set
+`AUDIOBOOK_TTS_RELEASE_AFTER_JOB=false` only after stability testing if keeping the model hot between
+jobs matters more than freeing VRAM. Real GPU mode rejects worker counts above one because model
+loading and generation share a single GPU model instance.
+
+The service cannot protect the desktop from a kernel/driver-level GPU hang. Before a long run, verify
+that `nvidia-smi` works, that the PyTorch CUDA build is supported by the installed NVIDIA driver, and
+that no display instability appears in a short one-chunk smoke test. A separate non-display GPU is
+the safest arrangement for unattended generation.
+
 ## Configuration
 
 All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
@@ -59,11 +82,15 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | Optional built-in voice model |
 | `AUDIOBOOK_VOICE_DESIGN_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` | Narrative voice design model |
 | `AUDIOBOOK_VOICE_CLONE_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Designed-voice cloning model |
+| `AUDIOBOOK_TTS_BACKEND` | `official` | `official` or opt-in `faster` CUDA graphs |
 | `AUDIOBOOK_TTS_DEVICE` | `cuda:0` | PyTorch device map |
 | `AUDIOBOOK_TTS_DTYPE` | `bfloat16` | PyTorch dtype name |
 | `AUDIOBOOK_TTS_ATTENTION` | `auto` | `flash_attention_2` when installed, otherwise `sdpa` |
+| `AUDIOBOOK_TTS_MAX_SEQ_LEN` | `2048` | Static cache length used by the faster backend |
+| `AUDIOBOOK_TTS_MAX_NEW_TOKENS` | `2048` | Per-chunk codec-token generation ceiling |
 | `AUDIOBOOK_CHUNK_CHARS` | `1200` | Maximum text characters per synthesis call |
 | `AUDIOBOOK_WORKER_COUNT` | `1` | Concurrent background jobs; one is safest for GPU memory |
+| `AUDIOBOOK_TTS_RELEASE_AFTER_JOB` | `true` | Release model and cached VRAM after each job |
 | `AUDIOBOOK_MOCK_PIPELINE` | `false` | Use deterministic local chapters and short tone WAVs |
 
 Jobs move through `queued`, `crawling`, `synthesizing`, `completed`, or `failed`. Progress, errors,

@@ -103,6 +103,9 @@ class Pipeline:
                 stage="Failed",
                 error=f"{type(exc).__name__}: {exc}",
             )
+        finally:
+            if self.settings.tts_release_after_job:
+                self.tts.release()
 
 
 class WorkerPool:

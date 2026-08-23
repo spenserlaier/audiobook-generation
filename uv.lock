@@ -163,11 +163,16 @@ tts = [
     { name = "qwen-tts" },
     { name = "soundfile" },
 ]
+tts-faster = [
+    { name = "faster-qwen3-tts" },
+    { name = "soundfile" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "chardet", marker = "extra == 'crawler'", specifier = ">=5,<6" },
     { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "faster-qwen3-tts", marker = "extra == 'tts-faster'", specifier = "==0.3.2" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "lightnovel-crawler", marker = "extra == 'crawler'", specifier = ">=4.14,<5" },
     { name = "pydantic-settings", specifier = ">=2.5,<3" },
@@ -175,9 +180,10 @@ requires-dist = [
     { name = "qwen-tts", marker = "extra == 'tts'", specifier = ">=0.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "soundfile", marker = "extra == 'tts'", specifier = ">=0.12" },
+    { name = "soundfile", marker = "extra == 'tts-faster'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30,<1" },
 ]
-provides-extras = ["crawler", "tts", "dev"]
+provides-extras = ["crawler", "tts", "tts-faster", "dev"]
 
 [[package]]
 name = "audioop-lts"
@@ -1080,6 +1086,24 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/41/19/a7dedfd11d7284b06fcc12edf1061fb1d5dfd9fceb914c695ad09dc280db/fastar-0.12.0-pp311-pypy311_pp73-musllinux_1_2_armv7l.whl", hash = "sha256:b9dbdd0d9a7082d924489411bf84d8dd392f18bbfb4379a60fee97275e6d8c1f", size = 1030316, upload-time = "2026-08-20T09:10:44.31Z" },
     { url = "https://files.pythonhosted.org/packages/3b/b2/94e2a280eae42b9242331938f0013b6b02c02ad369eef205ba822bc98f21/fastar-0.12.0-pp311-pypy311_pp73-musllinux_1_2_i686.whl", hash = "sha256:689fed84ab320e428fb7ee1ee7ad5dae856f8d75c12df6860258fa94497eae7e", size = 1070283, upload-time = "2026-08-20T09:11:04.32Z" },
     { url = "https://files.pythonhosted.org/packages/1f/86/62c8477e775e1c035b817fd64964de3f8bd5743a53ca547c656484f5c356/fastar-0.12.0-pp311-pypy311_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:70077a6d327ffa5d54f9d7bad6e6583c010530a5b120f5ad71a83b0a14d26ad9", size = 1025083, upload-time = "2026-08-20T09:11:23.724Z" },
+]
+
+[[package]]
+name = "faster-qwen3-tts"
+version = "0.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "qwen-tts" },
+    { name = "soundfile" },
+    { name = "torch" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/27/ea/03a22ef4befde982111b509e89b371b2b3066b658f0e43eb5b6de553ea0d/faster_qwen3_tts-0.3.2.tar.gz", hash = "sha256:8fb853b2b896e14858f342245780814c522d3ae06babc717ac926399ad8c3e6f", size = 93311, upload-time = "2026-07-17T11:53:32.064Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ea/c7/49525c63af1644d6706d415c61558c8013c675fbd5ef50bc5e4b7c2641dc/faster_qwen3_tts-0.3.2-py3-none-any.whl", hash = "sha256:b17b2839d56cb178f5c382d85214ae62852b5728830bfeda066e6a15c832a364", size = 42924, upload-time = "2026-07-17T11:53:30.583Z" },
 ]
 
 [[package]]

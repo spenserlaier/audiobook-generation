@@ -39,7 +39,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/health")
     async def health() -> dict[str, str | bool]:
-        return {"status": "ok", "mock_pipeline": settings.mock_pipeline}
+        return {
+            "status": "ok",
+            "mock_pipeline": settings.mock_pipeline,
+            "tts_backend": settings.tts_backend,
+        }
 
     @app.post("/api/jobs", response_model=Job, status_code=status.HTTP_202_ACCEPTED)
     async def create_job(request: CreateJob) -> Job:

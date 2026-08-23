@@ -35,3 +35,61 @@ def test_clone_synthesis_creates_missing_output_directory(monkeypatch, tmp_path)
     synthesizer.synthesize_clone("Chapter text", output, "English", object())
 
     assert output.is_file()
+
+
+def test_faster_backend_uses_cuda_graph_compatible_load_options(monkeypatch, tmp_path):
+    class FakeCuda:
+        @staticmethod
+        def is_available():
+            return True
+
+    class FakeTorch:
+        bfloat16 = object()
+        cuda = FakeCuda()
+
+    class FakeModelClass:
+        called_with = None
+
+        @classmethod
+        def from_pretrained(cls, model_id, **kwargs):
+            cls.called_with = (model_id, kwargs)
+            return object()
+
+    settings = Settings(
+        data_dir=tmp_path,
+        tts_backend="faster",
+        tts_max_seq_len=1024,
+        tts_max_new_tokens=1024,
+    )
+    synthesizer = QwenSynthesizer(settings)
+    monkeypatch.setattr(
+        synthesizer, "_dependencies", lambda: (FakeTorch, object(), FakeModelClass)
+    )
+
+    synthesizer._load(settings.voice_clone_model)
+
+    model_id, kwargs = FakeModelClass.called_with
+    assert model_id == settings.voice_clone_model
+    assert kwargs["device"] == "cuda:0"
+    assert kwargs["attn_implementation"] == "sdpa"
+    assert kwargs["max_seq_len"] == 1024
+    assert "device_map" not in kwargs
+
+
+def test_faster_backend_builds_prompt_with_wrapped_upstream_model(monkeypatch, tmp_path):
+    expected = object()
+
+    class PromptModel:
+        def create_voice_clone_prompt(self, **kwargs):
+            assert kwargs["x_vector_only_mode"] is False
+            return expected
+
+    class FasterModel:
+        model = PromptModel()
+
+    synthesizer = QwenSynthesizer(Settings(data_dir=tmp_path, tts_backend="faster"))
+    monkeypatch.setattr(synthesizer, "_load", lambda _: FasterModel())
+
+    prompt = synthesizer.create_clone_prompt(tmp_path / "reference.wav", "reference")
+
+    assert prompt is expected
