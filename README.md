@@ -95,6 +95,9 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 
 The UI can generate reusable narrator previews before a novel is submitted. Completed chapters can
 be played or downloaded individually, and completed jobs provide a ZIP containing every WAV.
+Jobs can be hidden from the main list without affecting their files. The separate Storage view shows
+disk usage per run and can permanently remove its generated WAV, voice-reference, and ZIP files while
+retaining the job history in SQLite.
 
 Jobs move through `queued`, `crawling`, `synthesizing`, `completed`, or `failed`. Progress, errors,
 normalized chapter text, and audio links persist in SQLite. On server restart, queued or interrupted
