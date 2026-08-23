@@ -32,7 +32,7 @@ async function refresh() {
   const response = await fetch('/api/jobs');
   const jobs = await response.json();
   if (!jobs.length) { jobsEl.innerHTML = '<p class="empty">No jobs yet.</p>'; return; }
-  const cards = jobs.map(job => `<article class="job"><div class="job-head"><div><h3>${escapeHtml(job.title || 'Untitled audiobook')}</h3><small>${escapeHtml(job.novel_url)}</small></div><div class="job-controls"><strong>${escapeHtml(job.status)}</strong><button class="quiet remove-job" data-job-id="${job.id}" type="button">Remove from list</button></div></div><div class="bar"><span style="width:${Math.round(job.progress*100)}%"></span></div><small>${escapeHtml(job.stage)} · ${Math.round(job.progress*100)}%</small>${job.status === 'completed' && job.output_dir ? `<p><a class="download" href="/api/jobs/${job.id}/download" download>Download all chapters (.zip)</a></p>` : ''}${job.voice_preview_url ? `<div class="chapter"><span>Designed voice preview</span><audio controls preload="none" src="${job.voice_preview_url}"></audio></div>` : ''}${job.error ? `<p class="failed">${escapeHtml(job.error)}</p>` : ''}${chapterPanel(job)}</article>`);
+  const cards = jobs.map(job => `<article class="job"><div class="job-head"><div><h3>${escapeHtml(job.title || 'Untitled audiobook')}</h3><small>${escapeHtml(job.novel_url)}</small></div><div class="job-controls"><strong>${escapeHtml(job.status)}</strong>${['queued','crawling','synthesizing'].includes(job.status) ? `<button class="danger cancel-job" data-job-id="${job.id}" type="button">Cancel</button>` : ''}<button class="quiet remove-job" data-job-id="${job.id}" type="button">Remove from list</button></div></div><div class="bar"><span style="width:${Math.round(job.progress*100)}%"></span></div><small>${escapeHtml(job.stage)} · ${Math.round(job.progress*100)}%</small>${job.status === 'completed' && job.output_dir ? `<p><a class="download" href="/api/jobs/${job.id}/download" download>Download all chapters (.zip)</a></p>` : ''}${job.voice_preview_url ? `<div class="chapter"><span>Designed voice preview</span><audio controls preload="none" src="${job.voice_preview_url}"></audio></div>` : ''}${job.error ? `<p class="failed">${escapeHtml(job.error)}</p>` : ''}${chapterPanel(job)}</article>`);
   jobsEl.innerHTML = cards.join('');
 }
 
@@ -66,6 +66,13 @@ document.querySelector('#chapter-scope').addEventListener('change', event => {
 document.querySelector('#refresh').addEventListener('click', refresh);
 document.querySelector('#refresh-storage').addEventListener('click', refreshStorage);
 jobsEl.addEventListener('click', async event => {
+  const cancel = event.target.closest('.cancel-job');
+  if (cancel) {
+    if (!confirm('Cancel this job? Any current crawler process will be stopped.')) return;
+    const response = await fetch(`/api/jobs/${cancel.dataset.jobId}/cancel`, {method:'POST'});
+    if (!response.ok) { const detail = await response.json(); alert(detail.detail); }
+    await refresh(); return;
+  }
   const button = event.target.closest('.remove-job');
   if (button) {
     await fetch(`/api/jobs/${button.dataset.jobId}`, {method:'DELETE'});
@@ -85,6 +92,12 @@ jobsEl.addEventListener('click', async event => {
 document.querySelector('#clear-jobs').addEventListener('click', async () => {
   if (!confirm('Remove every job from the main list? Generation will continue and files will be kept.')) return;
   await fetch('/api/jobs', {method:'DELETE'}); await refresh(); await refreshStorage();
+});
+document.querySelector('#clear-queue').addEventListener('click', async () => {
+  if (!confirm('Cancel every job still waiting for a worker?')) return;
+  const response = await fetch('/api/jobs/cancel-pending', {method:'POST'});
+  const result = await response.json(); alert(`Cancelled ${result.cancelled} queued jobs.`);
+  await refresh();
 });
 storageEl.addEventListener('click', async event => {
   const button = event.target.closest('.delete-files');

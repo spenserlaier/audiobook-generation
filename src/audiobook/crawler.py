@@ -1,12 +1,18 @@
 import json
 import os
+import signal
 import sqlite3
 import subprocess
+import threading
 import zipfile
 from pathlib import Path
 from typing import Any
 
 from .models import Chapter
+
+
+class CrawlCancelled(Exception):
+    pass
 
 
 def _text(value: Any) -> str:
@@ -97,7 +103,13 @@ def crawler_args(command: str, url: str, limit: int | None) -> list[str]:
     return args
 
 
-def crawl(command: str, url: str, destination: Path, limit: int | None) -> list[Chapter]:
+def crawl(
+    command: str,
+    url: str,
+    destination: Path,
+    limit: int | None,
+    cancel_event: threading.Event | None = None,
+) -> list[Chapter]:
     destination.mkdir(parents=True, exist_ok=True)
     before = {
         path: (path.stat().st_mtime_ns, path.stat().st_size)
@@ -106,14 +118,41 @@ def crawl(command: str, url: str, destination: Path, limit: int | None) -> list[
     }
     args = crawler_args(command, url, limit)
     environment = {**os.environ, "LNCRAWL_DATA_PATH": str(destination.resolve())}
-    result = subprocess.run(
-        args,
-        cwd=destination,
-        env=environment,
-        text=True,
-        capture_output=True,
-        timeout=3600,
-    )
+    if cancel_event is None:
+        result = subprocess.run(
+            args, cwd=destination, env=environment, text=True, capture_output=True, timeout=3600
+        )
+    else:
+        process = subprocess.Popen(
+            args,
+            cwd=destination,
+            env=environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        while True:
+            if cancel_event.is_set():
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+                raise CrawlCancelled("Crawler cancelled")
+            try:
+                stdout, stderr = process.communicate(timeout=0.2)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        result = subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
     if result.returncode:
         detail = (result.stderr or result.stdout).strip()[-2000:]
         raise RuntimeError(f"lightnovel-crawler failed ({result.returncode}): {detail}")

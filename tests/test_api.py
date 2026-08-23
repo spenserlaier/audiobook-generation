@@ -61,6 +61,26 @@ async def test_invalid_url_and_missing_job(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_queued_jobs_can_be_cancelled(tmp_path):
+    app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        first = (
+            await client.post("/api/jobs", json={"novel_url": "https://example.com/one"})
+        ).json()
+        second = (
+            await client.post("/api/jobs", json={"novel_url": "https://example.com/two"})
+        ).json()
+        response = await client.post(f"/api/jobs/{first['id']}/cancel")
+        assert response.status_code == 200
+        assert response.json()["status"] == "cancelled"
+        response = await client.post("/api/jobs/cancel-pending")
+        assert response.json() == {"cancelled": 1}
+        assert (await client.get(f"/api/jobs/{second['id']}")).json()["status"] == "cancelled"
+
+
+@pytest.mark.anyio
 async def test_reusable_voice_preview_and_job_download(tmp_path):
     app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
     async with app.router.lifespan_context(app):

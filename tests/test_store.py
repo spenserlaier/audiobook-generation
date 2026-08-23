@@ -18,12 +18,14 @@ def test_job_and_chapter_state_persists(tmp_path):
     assert reopened.get(job.id).synthesis_mode == SynthesisMode.DESIGNED_CLONE
 
 
-def test_recovery_requeues_active_job(tmp_path):
+def test_recovery_cancels_interrupted_job(tmp_path):
     store = JobStore(tmp_path / "state.sqlite3")
-    job = store.create(CreateJob(novel_url="https://example.com/book"))
-    store.update(job.id, status=JobStatus.CRAWLING)
-    assert store.recover_interrupted() == [job.id]
-    assert store.get(job.id).status == JobStatus.QUEUED
+    interrupted = store.create(CreateJob(novel_url="https://example.com/interrupted"))
+    queued = store.create(CreateJob(novel_url="https://example.com/queued"))
+    store.update(interrupted.id, status=JobStatus.CRAWLING)
+    assert store.recover_interrupted() == [queued.id]
+    assert store.get(interrupted.id).status == JobStatus.CANCELLED
+    assert store.get(queued.id).status == JobStatus.QUEUED
 
 
 def test_existing_database_gets_voice_design_columns(tmp_path):

@@ -95,6 +95,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def hide_all_jobs() -> dict[str, int]:
         return {"hidden": store.hide_all()}
 
+    @app.post("/api/jobs/cancel-pending")
+    async def cancel_pending_jobs() -> dict[str, int]:
+        cancelled = 0
+        for job in store.list(limit=10_000, include_hidden=True):
+            if job.status == "queued":
+                workers.cancel(job.id)
+                store.update(job.id, status="cancelled", stage="Cancelled", error=None)
+                cancelled += 1
+        return {"cancelled": cancelled}
+
     @app.get("/api/jobs/{job_id}", response_model=Job)
     async def get_job(job_id: str) -> Job:
         try:
@@ -108,6 +118,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             store.hide(job_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Job not found") from exc
+
+    @app.post("/api/jobs/{job_id}/cancel", response_model=Job)
+    async def cancel_job(job_id: str) -> Job:
+        try:
+            job = store.get(job_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Job not found") from exc
+        if job.status not in {"queued", "crawling", "synthesizing"}:
+            raise HTTPException(status_code=409, detail="Job is not active")
+        workers.cancel(job.id)
+        return store.update(job.id, status="cancelled", stage="Cancelling", error=None)
 
     @app.get("/api/jobs/{job_id}/chapters", response_model=list[ChapterRecord])
     async def get_chapters(

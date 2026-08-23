@@ -3,7 +3,7 @@ import threading
 
 from .audio import write_mock_wav
 from .config import Settings
-from .crawler import crawl
+from .crawler import CrawlCancelled, crawl
 from .models import Chapter, JobStatus, SynthesisMode, VoiceStatus
 from .store import JobStore
 from .tts import QwenSynthesizer
@@ -15,10 +15,13 @@ class Pipeline:
         self.store = store
         self.tts = QwenSynthesizer(settings)
 
-    def run(self, job_id: str) -> None:
+    def run(self, job_id: str, cancel_event: threading.Event | None = None) -> None:
+        cancel_event = cancel_event or threading.Event()
         job = self.store.get(job_id)
         job_dir = self.settings.data_dir / "jobs" / job.id
         try:
+            if cancel_event.is_set():
+                raise CrawlCancelled("Job cancelled")
             self.store.update(
                 job.id, status=JobStatus.CRAWLING, stage="Crawling novel", progress=0.02, error=None
             )
@@ -38,7 +41,10 @@ class Pipeline:
                     job.novel_url,
                     self.settings.data_dir / "crawler-state",
                     job.chapter_limit,
+                    cancel_event,
                 )
+            if cancel_event.is_set():
+                raise CrawlCancelled("Job cancelled")
             self.store.replace_chapters(job.id, chapters)
             title = job.title or "Audiobook"
             self.store.update(
@@ -84,10 +90,16 @@ class Pipeline:
                         voice_preview_url=f"/api/jobs/{job.id}/voice-preview",
                         stage="Narrative voice ready",
                     )
+                if cancel_event.is_set():
+                    raise CrawlCancelled("Job cancelled")
                 if not self.settings.mock_pipeline:
                     # Loading Base releases VoiceDesign and its CUDA allocation first.
                     clone_prompt = self.tts.create_clone_prompt(reference_audio, reference_text)
+                if cancel_event.is_set():
+                    raise CrawlCancelled("Job cancelled")
             for completed, chapter in enumerate(chapters, 1):
+                if cancel_event.is_set():
+                    raise CrawlCancelled("Job cancelled")
                 output = job_dir / "audio" / f"chapter-{chapter.index:04d}.wav"
                 self.store.update_chapter(job.id, chapter.index, status="synthesizing", error=None)
                 if self.settings.mock_pipeline:
@@ -109,6 +121,13 @@ class Pipeline:
                     stage=f"Synthesized {completed}/{len(chapters)} chapters",
                 )
             self.store.update(job.id, status=JobStatus.COMPLETED, stage="Complete", progress=1.0)
+        except CrawlCancelled:
+            self.store.update(
+                job.id,
+                status=JobStatus.CANCELLED,
+                stage="Cancelled",
+                error=None,
+            )
         except Exception as exc:
             self.store.update(
                 job.id,
@@ -155,6 +174,9 @@ class WorkerPool:
         self.count = count
         self.queue: queue.Queue[tuple[str, str] | None] = queue.Queue()
         self.threads: list[threading.Thread] = []
+        self._lock = threading.Lock()
+        self._cancelled: set[str] = set()
+        self._active: dict[str, threading.Event] = {}
 
     def start(self) -> None:
         for index in range(self.count):
@@ -170,6 +192,13 @@ class WorkerPool:
     def submit_voice(self, voice_id: str) -> None:
         self.queue.put(("voice", voice_id))
 
+    def cancel(self, job_id: str) -> None:
+        with self._lock:
+            self._cancelled.add(job_id)
+            event = self._active.get(job_id)
+            if event:
+                event.set()
+
     def _work(self) -> None:
         while True:
             task = self.queue.get()
@@ -180,7 +209,18 @@ class WorkerPool:
                 if kind == "voice":
                     self.pipeline.generate_voice(item_id)
                 else:
-                    self.pipeline.run(item_id)
+                    with self._lock:
+                        if item_id in self._cancelled:
+                            self._cancelled.discard(item_id)
+                            continue
+                        cancel_event = threading.Event()
+                        self._active[item_id] = cancel_event
+                    try:
+                        self.pipeline.run(item_id, cancel_event)
+                    finally:
+                        with self._lock:
+                            self._active.pop(item_id, None)
+                            self._cancelled.discard(item_id)
             finally:
                 self.queue.task_done()
 

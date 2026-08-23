@@ -1,11 +1,14 @@
 import json
 import sqlite3
+import threading
+import time
 import zipfile
 from types import SimpleNamespace
 
 import pytest
 
 from audiobook.crawler import (
+    CrawlCancelled,
     crawl,
     crawler_args,
     load_persisted_chapters,
@@ -97,3 +100,19 @@ def test_crawl_uses_project_state_and_new_json(monkeypatch, tmp_path):
 
     assert chapters[0].title == "Fresh"
     assert invocation["env"]["LNCRAWL_DATA_PATH"] == str(tmp_path.resolve())
+
+
+def test_crawl_can_terminate_a_stalled_process(tmp_path):
+    command = tmp_path / "stalled-crawler"
+    command.write_text("#!/bin/sh\nsleep 60\n", encoding="utf-8")
+    command.chmod(0o755)
+    cancel_event = threading.Event()
+    timer = threading.Timer(0.1, cancel_event.set)
+    timer.start()
+    started = time.monotonic()
+    try:
+        with pytest.raises(CrawlCancelled):
+            crawl(str(command), "https://example.com/book", tmp_path / "state", 1, cancel_event)
+    finally:
+        timer.cancel()
+    assert time.monotonic() - started < 3

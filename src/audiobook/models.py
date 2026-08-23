@@ -10,6 +10,7 @@ class JobStatus(StrEnum):
     SYNTHESIZING = "synthesizing"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class SynthesisMode(StrEnum):

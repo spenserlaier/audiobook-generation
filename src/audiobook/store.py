@@ -231,14 +231,16 @@ class JobStore:
             )
 
     def recover_interrupted(self) -> list[str]:
-        active = (JobStatus.QUEUED, JobStatus.CRAWLING, JobStatus.SYNTHESIZING)
         with self._connect() as db:
-            rows = db.execute("SELECT id FROM jobs WHERE status IN (?, ?, ?)", active).fetchall()
+            rows = db.execute(
+                "SELECT id FROM jobs WHERE status = ?", (JobStatus.QUEUED,)
+            ).fetchall()
             db.execute(
-                "UPDATE jobs SET status = ?, stage = ? WHERE status IN (?, ?)",
+                "UPDATE jobs SET status = ?, stage = ?, error = ? WHERE status IN (?, ?)",
                 (
-                    JobStatus.QUEUED,
-                    "Resuming after restart",
+                    JobStatus.CANCELLED,
+                    "Cancelled after server restart",
+                    "The server stopped while this job was running.",
                     JobStatus.CRAWLING,
                     JobStatus.SYNTHESIZING,
                 ),
