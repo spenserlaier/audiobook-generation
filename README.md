@@ -48,6 +48,7 @@ it does not modify the installed package or user-level crawler database. Crawler
 cache live under `AUDIOBOOK_DATA_DIR/crawler-state`. It loads
 `Qwen3TTSModel` only when synthesis begins, so the normal API and tests do not import PyTorch or
 download weights. Temporary chunk WAVs are joined into one WAV per chapter.
+The chapter scope can explicitly target all chapters or only the first requested number.
 
 The default workflow targets an RTX 4090: the 1.7B VoiceDesign checkpoint generates a short voice
 reference, then the 1.7B Base checkpoint clones it for every chapter. VoiceDesign is released from
