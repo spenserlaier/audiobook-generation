@@ -43,9 +43,10 @@ memory before Base is loaded so the checkpoints do not occupy VRAM together. The
 is playable in the job UI. The optional built-in-voice workflow uses the 1.7B CustomVoice checkpoint.
 
 A CUDA GPU is strongly recommended. The first real job downloads the selected model weights.
-FlashAttention 2 is the default attention implementation and
-requires compatible CUDA hardware plus `float16` or `bfloat16`; set the attention option to an empty
-string to use the model's default implementation.
+Attention selection defaults to `auto`: FlashAttention 2 is used when `flash_attn` is installed,
+otherwise PyTorch SDPA is used. SDPA works on the RTX 4090 without compiling an additional CUDA
+extension. An explicit `flash_attention_2` setting requires a compatible `flash-attn` installation
+plus `float16` or `bfloat16`.
 
 ## Configuration
 
@@ -60,7 +61,7 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_VOICE_CLONE_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Designed-voice cloning model |
 | `AUDIOBOOK_TTS_DEVICE` | `cuda:0` | PyTorch device map |
 | `AUDIOBOOK_TTS_DTYPE` | `bfloat16` | PyTorch dtype name |
-| `AUDIOBOOK_TTS_ATTENTION` | `flash_attention_2` | Attention implementation |
+| `AUDIOBOOK_TTS_ATTENTION` | `auto` | `flash_attention_2` when installed, otherwise `sdpa` |
 | `AUDIOBOOK_CHUNK_CHARS` | `1200` | Maximum text characters per synthesis call |
 | `AUDIOBOOK_WORKER_COUNT` | `1` | Concurrent background jobs; one is safest for GPU memory |
 | `AUDIOBOOK_MOCK_PIPELINE` | `false` | Use deterministic local chapters and short tone WAVs |

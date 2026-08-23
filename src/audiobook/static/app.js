@@ -9,6 +9,8 @@ async function chapters(job) {
 }
 
 async function refresh() {
+  // Replacing the job cards destroys active audio elements and stops playback.
+  if ([...jobsEl.querySelectorAll('audio')].some(player => !player.paused)) return;
   const response = await fetch('/api/jobs');
   const jobs = await response.json();
   if (!jobs.length) { jobsEl.innerHTML = '<p class="empty">No jobs yet.</p>'; return; }

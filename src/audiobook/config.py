@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     voice_clone_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
     tts_device: str = "cuda:0"
     tts_dtype: str = "bfloat16"
-    tts_attention: str = "flash_attention_2"
+    tts_attention: str = "auto"
     chunk_chars: int = 1200
     mock_pipeline: bool = False
     worker_count: int = 1

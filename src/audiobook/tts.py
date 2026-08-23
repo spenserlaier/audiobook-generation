@@ -1,9 +1,21 @@
 import gc
+import importlib.util
 from pathlib import Path
 from typing import Any
 
 from .audio import combine_wavs, split_text
 from .config import Settings
+
+
+def resolve_attention(requested: str, flash_available: bool | None = None) -> str | None:
+    choice = requested.strip().lower()
+    if not choice:
+        return None
+    if choice != "auto":
+        return choice
+    if flash_available is None:
+        flash_available = importlib.util.find_spec("flash_attn") is not None
+    return "flash_attention_2" if flash_available else "sdpa"
 
 
 class QwenSynthesizer:
@@ -30,8 +42,9 @@ class QwenSynthesizer:
         if dtype is None:
             raise ValueError(f"Unsupported torch dtype: {self.settings.tts_dtype}")
         kwargs: dict[str, Any] = {"device_map": self.settings.tts_device, "dtype": dtype}
-        if self.settings.tts_attention:
-            kwargs["attn_implementation"] = self.settings.tts_attention
+        attention = resolve_attention(self.settings.tts_attention)
+        if attention:
+            kwargs["attn_implementation"] = attention
         self._model = model_class.from_pretrained(model_id, **kwargs)
         self._model_id = model_id
         return self._model
@@ -70,6 +83,7 @@ class QwenSynthesizer:
     ) -> None:
         _, sf, _ = self._dependencies()
         model = self._load(self.settings.voice_clone_model)
+        output.parent.mkdir(parents=True, exist_ok=True)
         parts: list[Path] = []
         for index, chunk in enumerate(split_text(text, self.settings.chunk_chars), 1):
             wavs, sample_rate = model.generate_voice_clone(
@@ -90,6 +104,7 @@ class QwenSynthesizer:
     ) -> None:
         _, sf, _ = self._dependencies()
         model = self._load(self.settings.tts_model)
+        output.parent.mkdir(parents=True, exist_ok=True)
         parts: list[Path] = []
         for index, chunk in enumerate(split_text(text, self.settings.chunk_chars), 1):
             wavs, sample_rate = model.generate_custom_voice(
