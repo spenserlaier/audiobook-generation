@@ -102,6 +102,11 @@ retaining the job history in SQLite. Bulk controls clear the job list or all fin
 active generation is never cancelled or deleted. Chapter lists start collapsed and fetch 50 records
 at a time when expanded, keeping large libraries responsive.
 
+Active jobs have a Cancel control. Cancelling a crawl terminates its crawler process; synthesis stops
+between chapters. Clear queue cancels all jobs still waiting for the worker. If the server stops during
+a crawl or synthesis, that interrupted job is marked cancelled on restart instead of automatically
+blocking the worker again.
+
 Jobs move through `queued`, `crawling`, `synthesizing`, `completed`, or `failed`. Progress, errors,
 normalized chapter text, and audio links persist in SQLite. On server restart, queued or interrupted
 jobs are submitted again. The crawler and synthesizer may repeat work for an interrupted job, but
