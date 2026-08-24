@@ -80,6 +80,8 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | --- | --- | --- |
 | `AUDIOBOOK_DATA_DIR` | `data` | SQLite, crawl artifacts, and chapter audio |
 | `AUDIOBOOK_CRAWLER_COMMAND` | `audiobook-lncrawl` | Crawler compatibility launcher |
+| `AUDIOBOOK_FFMPEG_COMMAND` | `ffmpeg` | FFmpeg executable used for MP3 archive exports |
+| `AUDIOBOOK_MP3_BITRATE` | `128k` | MP3 archive export bitrate |
 | `AUDIOBOOK_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | Optional built-in voice model |
 | `AUDIOBOOK_VOICE_DESIGN_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` | Narrative voice design model |
 | `AUDIOBOOK_VOICE_CLONE_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Designed-voice cloning model |
@@ -97,7 +99,9 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 The UI can generate reusable narrator previews before a novel is submitted. Completed chapters can
 be played or downloaded individually. Whole-book ZIPs are prepared by a singleton background task,
 show chapter-count progress, and become downloadable only after an atomic finalization step. Repeated
-requests reuse the active task or completed archive instead of restarting it.
+requests reuse the active task or completed archive instead of restarting it. MP3 is the default ZIP
+format; WAV export remains available, and both formats can coexist for the same job. MP3 export uses
+FFmpeg to encode each source chapter without replacing the original WAV.
 Jobs can be hidden from the main list without affecting their files. The separate Storage view shows
 disk usage per run and can permanently remove its generated WAV, voice-reference, and ZIP files while
 retaining the job history in SQLite. Bulk controls clear the job list or all finished-run artifacts;
