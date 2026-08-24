@@ -18,6 +18,7 @@ from .models import (
     CreateJob,
     CreateVoice,
     Job,
+    RenameVoice,
     StorageEntry,
     SynthesisMode,
     Voice,
@@ -276,6 +277,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return store.get_voice(voice_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Voice not found") from exc
+
+    @app.patch("/api/voices/{voice_id}", response_model=Voice)
+    async def rename_voice(voice_id: str, request: RenameVoice) -> Voice:
+        try:
+            return store.update_voice(voice_id, name=request.name)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Voice not found") from exc
+
+    @app.delete("/api/voices/{voice_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_voice(voice_id: str) -> None:
+        try:
+            voice = store.get_voice(voice_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Voice not found") from exc
+        if voice.status in {VoiceStatus.QUEUED, VoiceStatus.GENERATING}:
+            raise HTTPException(status_code=409, detail="Cannot delete a voice being generated")
+        if store.voice_has_active_jobs(voice_id):
+            raise HTTPException(
+                status_code=409, detail="Cannot delete a voice used by an active job"
+            )
+        directory = settings.data_dir / "voices" / voice_id
+        if directory.is_dir():
+            shutil.rmtree(directory)
+        store.delete_voice(voice_id)
 
     @app.get("/api/voices/{voice_id}/preview")
     async def reusable_voice_preview(voice_id: str) -> StreamingResponse:

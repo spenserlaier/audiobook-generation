@@ -147,6 +147,29 @@ class JobStore:
             db.execute(f"UPDATE voices SET {assignments} WHERE id = ?", (*normalized, voice_id))
         return self.get_voice(voice_id)
 
+    def delete_voice(self, voice_id: str) -> None:
+        with self._connect() as db:
+            # Completed jobs retain their outputs, but should not preselect a deleted
+            # narrator if they are later used as a regeneration source.
+            db.execute("UPDATE jobs SET voice_id = NULL WHERE voice_id = ?", (voice_id,))
+            cursor = db.execute("DELETE FROM voices WHERE id = ?", (voice_id,))
+        if cursor.rowcount == 0:
+            raise KeyError(voice_id)
+
+    def voice_has_active_jobs(self, voice_id: str) -> bool:
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT 1 FROM jobs WHERE voice_id = ?
+                   AND status IN (?, ?, ?) LIMIT 1""",
+                (
+                    voice_id,
+                    JobStatus.QUEUED,
+                    JobStatus.CRAWLING,
+                    JobStatus.SYNTHESIZING,
+                ),
+            ).fetchone()
+        return row is not None
+
     def get(self, job_id: str) -> Job:
         with self._connect() as db:
             row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()

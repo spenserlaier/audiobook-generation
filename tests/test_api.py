@@ -63,6 +63,51 @@ async def test_invalid_url_and_missing_job(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_failed_voice_can_be_renamed_and_deleted_with_its_files(tmp_path):
+    app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        created = (await client.post("/api/voices", json={"name": "Failed voice"})).json()
+        voice_id = created["id"]
+        app.state.store.update_voice(voice_id, status="failed", error="generation failed")
+        voice_dir = tmp_path / "voices" / voice_id
+        voice_dir.mkdir(parents=True)
+        (voice_dir / "preview.wav").write_bytes(b"partial")
+
+        renamed = await client.patch(
+            f"/api/voices/{voice_id}", json={"name": "Archived attempt"}
+        )
+        assert renamed.status_code == 200
+        assert renamed.json()["name"] == "Archived attempt"
+
+        deleted = await client.delete(f"/api/voices/{voice_id}")
+        assert deleted.status_code == 204
+        assert not voice_dir.exists()
+        assert (await client.get(f"/api/voices/{voice_id}")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_voice_used_by_active_job_cannot_be_deleted(tmp_path):
+    app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        voice = (await client.post("/api/voices", json={"name": "In use"})).json()
+        app.state.store.update_voice(voice["id"], status="ready", preview_url="/preview")
+        job = await client.post(
+            "/api/jobs",
+            json={"novel_url": "https://example.com/book", "voice_id": voice["id"]},
+        )
+        assert job.status_code == 202
+
+        response = await client.delete(f"/api/voices/{voice['id']}")
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "Cannot delete a voice used by an active job"
+
+
+@pytest.mark.anyio
 async def test_queued_jobs_can_be_cancelled(tmp_path):
     app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
     async with httpx.AsyncClient(

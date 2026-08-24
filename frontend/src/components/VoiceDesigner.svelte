@@ -1,5 +1,5 @@
 <script>
-  import { jsonPost } from '../api.js';
+  import { jsonPost, request } from '../api.js';
 
   let { voices, onChanged } = $props();
   let name = $state('Narrator');
@@ -8,6 +8,8 @@
   let referenceText = $state('The road disappeared into the evening mist, and with every quiet step, the old world fell farther behind. Ahead waited a story no one had dared to tell.');
   let error = $state('');
   let submitting = $state(false);
+  let editingId = $state(null);
+  let editingName = $state('');
 
   async function submit() {
     error = ''; submitting = true;
@@ -16,6 +18,28 @@
       await onChanged();
     } catch (exc) { error = exc.message; }
     finally { submitting = false; }
+  }
+
+  function beginRename(voice) {
+    editingId = voice.id;
+    editingName = voice.name;
+  }
+
+  async function rename(voice) {
+    try {
+      await request(`/api/voices/${voice.id}`, {
+        method: 'PATCH', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({name: editingName}),
+      });
+      editingId = null;
+      await onChanged();
+    } catch (exc) { alert(exc.message); }
+  }
+
+  async function remove(voice) {
+    if (!confirm(`Delete saved voice “${voice.name}” and its preview file?`)) return;
+    try { await request(`/api/voices/${voice.id}`, {method: 'DELETE'}); await onChanged(); }
+    catch (exc) { alert(exc.message); }
   }
 </script>
 
@@ -36,7 +60,19 @@
     {#if voices.length === 0}<p class="empty">No saved voices yet.</p>{/if}
     {#each voices as voice (voice.id)}
       <div class="voice">
-        <div><strong>{voice.name}</strong> <small>· {voice.status}</small>{#if voice.error}<p class="failed">{voice.error}</p>{/if}</div>
+        <div>
+          {#if editingId === voice.id}
+            <form class="rename-voice" onsubmit={(event) => { event.preventDefault(); rename(voice); }}>
+              <input bind:value={editingName} required maxlength="120" aria-label="Voice name" />
+              <button class="quiet" type="submit">Save</button>
+              <button class="quiet" type="button" onclick={() => editingId = null}>Cancel</button>
+            </form>
+          {:else}
+            <strong>{voice.name}</strong> <small>· {voice.status}</small>
+            <div class="voice-controls"><button class="quiet" type="button" onclick={() => beginRename(voice)}>Rename</button><button class="danger" type="button" onclick={() => remove(voice)}>Delete</button></div>
+          {/if}
+          {#if voice.error}<p class="failed">{voice.error}</p>{/if}
+        </div>
         {#if voice.preview_url}<div class="audio-actions"><audio controls preload="none" src={voice.preview_url}></audio><a class="download" href={voice.preview_url} download>Download preview</a></div>{/if}
       </div>
     {/each}

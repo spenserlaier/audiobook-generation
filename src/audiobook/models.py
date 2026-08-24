@@ -132,6 +132,10 @@ class CreateVoice(BaseModel):
     )
 
 
+class RenameVoice(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
 class Voice(BaseModel):
     id: str
     name: str
