@@ -31,7 +31,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     store = JobStore(settings.database_path)
     workers = WorkerPool(Pipeline(settings, store), settings.worker_count)
     archives = ArchiveManager(
-        settings.data_dir, settings.ffmpeg_command, settings.mp3_bitrate
+        settings.data_dir,
+        settings.ffmpeg_command,
+        settings.mp3_bitrate,
+        settings.mp3_workers,
     )
 
     @asynccontextmanager

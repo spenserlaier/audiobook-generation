@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import threading
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZIP_STORED, BadZipFile, ZipFile, is_zipfile
@@ -17,10 +18,17 @@ class ArchiveState:
 
 
 class ArchiveManager:
-    def __init__(self, data_dir: Path, ffmpeg_command: str = "ffmpeg", mp3_bitrate: str = "128k"):
+    def __init__(
+        self,
+        data_dir: Path,
+        ffmpeg_command: str = "ffmpeg",
+        mp3_bitrate: str = "128k",
+        mp3_workers: int = 4,
+    ):
         self.data_dir = data_dir
         self.ffmpeg_command = ffmpeg_command
         self.mp3_bitrate = mp3_bitrate
+        self.mp3_workers = mp3_workers
         self._lock = threading.Lock()
         self._states: dict[tuple[str, str], ArchiveState] = {}
 
@@ -90,38 +98,13 @@ class ArchiveManager:
                 archive.unlink()
             compression = ZIP_STORED if output_format == "mp3" else ZIP_DEFLATED
             with ZipFile(temporary, "w", compression=compression) as bundle:
-                for completed, path in enumerate(files, 1):
-                    if not path.is_file():
-                        raise FileNotFoundError(f"Chapter audio is missing: {path.name}")
-                    export_path = path
-                    if output_format == "mp3":
-                        export_path = temporary.parent / f".{path.stem}.export.mp3"
-                    try:
-                        if output_format == "mp3":
-                            subprocess.run(
-                                [
-                                    self.ffmpeg_command,
-                                    "-y",
-                                    "-loglevel",
-                                    "error",
-                                    "-i",
-                                    str(path),
-                                    "-codec:a",
-                                    "libmp3lame",
-                                    "-b:a",
-                                    self.mp3_bitrate,
-                                    str(export_path),
-                                ],
-                                check=True,
-                                capture_output=True,
-                            )
-                        bundle.write(export_path, arcname=f"{path.stem}.{output_format}")
-                    finally:
-                        if output_format == "mp3":
-                            export_path.unlink(missing_ok=True)
-                    with self._lock:
-                        self._states[key].completed_files = completed
-                        self._states[key].size_bytes = temporary.stat().st_size
+                if output_format == "mp3":
+                    self._write_mp3_files(key, bundle, temporary, files)
+                else:
+                    for completed, path in enumerate(files, 1):
+                        self._require_file(path)
+                        bundle.write(path, arcname=path.name)
+                        self._record_progress(key, completed, temporary)
             # Opening the central directory catches incomplete or malformed output.
             with ZipFile(temporary) as bundle:
                 if len(bundle.infolist()) != len(files):
@@ -139,3 +122,71 @@ class ArchiveManager:
                     total_files=len(files),
                     error=f"{type(exc).__name__}: {exc}",
                 )
+
+    @staticmethod
+    def _require_file(path: Path) -> None:
+        if not path.is_file():
+            raise FileNotFoundError(f"Chapter audio is missing: {path.name}")
+
+    def _record_progress(
+        self, key: tuple[str, str], completed: int, temporary: Path
+    ) -> None:
+        with self._lock:
+            self._states[key].completed_files = completed
+            self._states[key].size_bytes = temporary.stat().st_size
+
+    def _convert_mp3(self, source: Path, output: Path) -> Path:
+        self._require_file(source)
+        subprocess.run(
+            [
+                self.ffmpeg_command,
+                "-y",
+                "-loglevel",
+                "error",
+                "-threads",
+                "1",
+                "-i",
+                str(source),
+                "-codec:a",
+                "libmp3lame",
+                "-b:a",
+                self.mp3_bitrate,
+                str(output),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        return output
+
+    def _write_mp3_files(
+        self,
+        key: tuple[str, str],
+        bundle: ZipFile,
+        temporary: Path,
+        files: list[Path],
+    ) -> None:
+        outputs = [temporary.parent / f".{path.stem}.export.mp3" for path in files]
+        futures: dict[int, Future[Path]] = {}
+        next_submit = 0
+        try:
+            with ThreadPoolExecutor(
+                max_workers=self.mp3_workers, thread_name_prefix="audiobook-mp3"
+            ) as executor:
+                while next_submit < min(self.mp3_workers, len(files)):
+                    futures[next_submit] = executor.submit(
+                        self._convert_mp3, files[next_submit], outputs[next_submit]
+                    )
+                    next_submit += 1
+                for index, source in enumerate(files):
+                    output = futures.pop(index).result()
+                    bundle.write(output, arcname=f"{source.stem}.mp3")
+                    output.unlink(missing_ok=True)
+                    self._record_progress(key, index + 1, temporary)
+                    if next_submit < len(files):
+                        futures[next_submit] = executor.submit(
+                            self._convert_mp3, files[next_submit], outputs[next_submit]
+                        )
+                        next_submit += 1
+        finally:
+            for output in outputs:
+                output.unlink(missing_ok=True)

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     crawler_command: str = "audiobook-lncrawl"
     ffmpeg_command: str = "ffmpeg"
     mp3_bitrate: str = "128k"
+    mp3_workers: int = Field(default=4, ge=1, le=32)
     tts_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
     voice_design_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
     voice_clone_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"

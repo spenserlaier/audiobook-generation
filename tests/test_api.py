@@ -1,4 +1,5 @@
 import asyncio
+import threading
 import time
 from io import BytesIO
 from pathlib import Path
@@ -83,9 +84,21 @@ async def test_queued_jobs_can_be_cancelled(tmp_path):
 
 @pytest.mark.anyio
 async def test_reusable_voice_preview_and_job_download(tmp_path, monkeypatch):
+    conversion_lock = threading.Lock()
+    active_conversions = 0
+    max_active_conversions = 0
+
     def fake_ffmpeg(args, **_kwargs):
+        nonlocal active_conversions, max_active_conversions
+        with conversion_lock:
+            active_conversions += 1
+            max_active_conversions = max(max_active_conversions, active_conversions)
+        time.sleep(0.05)
         source = Path(args[args.index("-i") + 1])
         Path(args[-1]).write_bytes(source.read_bytes())
+        with conversion_lock:
+            active_conversions -= 1
+        assert args[args.index("-threads") + 1] == "1"
 
     monkeypatch.setattr("audiobook.archive.subprocess.run", fake_ffmpeg)
     app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
@@ -140,6 +153,7 @@ async def test_reusable_voice_preview_and_job_download(tmp_path, monkeypatch):
                     break
                 await asyncio.sleep(0.02)
             assert archive_status["state"] == "ready", archive_status
+            assert max_active_conversions == 2
             assert archive_status["completed_files"] == 2
             assert archive_status["download_url"].endswith("/download?format=mp3")
             archive = await client.get(archive_status["download_url"])
