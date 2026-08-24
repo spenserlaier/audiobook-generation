@@ -8,6 +8,7 @@ header>p:last-child { color:#aeb4a4; font-size:1.1rem; }.eyebrow { font-size:.72
 label { display:grid; gap:8px; color:#c9cdbf; font-size:.85rem; }.row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:16px 0; }
 input,select,textarea { width:100%; border:1px solid #464d3d; border-radius:8px; padding:12px; background:#0e110d; color:#f4f4eb; font:inherit; }
 textarea { resize:vertical; } #designed-voice-fields,#voice-form { display:grid; gap:16px; margin-top:16px; }.hint { margin:0; color:#949b8b; font-size:.8rem; }
+.notice{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;padding:12px;border:1px solid #66704f;border-radius:10px;background:#252b20}.notice[hidden]{display:none}
 input:focus,select:focus,textarea:focus { outline:2px solid #d1ad57; border-color:transparent; }.actions,.section-title,.job-head,.section-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .actions { margin-top:20px; }button { border:0; border-radius:999px; padding:12px 20px; background:#e3bd61; color:#18150d; font-weight:700; cursor:pointer; }.danger{background:#74382f;color:#ffe8e2}.job-controls{display:flex;align-items:center;gap:10px}.remove-job{font-size:.72rem}
 a { color:#cbd9a6; }.error { color:#ff9c8d; }.section-title { margin-top:44px; }.section-title h2 { font-family:Georgia,serif; font-size:2rem; }

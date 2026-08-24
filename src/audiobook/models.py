@@ -27,6 +27,7 @@ class CreateJob(BaseModel):
     voice_instruction: str = Field(default="", max_length=500)
     synthesis_mode: SynthesisMode = SynthesisMode.DESIGNED_CLONE
     voice_id: str | None = Field(default=None, max_length=32)
+    source_job_id: str | None = Field(default=None, max_length=32)
     voice_description: str = Field(
         default=(
             "A compelling, warm audiobook narrator with a clear mid-low register, measured "
@@ -68,6 +69,7 @@ class Job(BaseModel):
     voice_instruction: str
     synthesis_mode: SynthesisMode
     voice_id: str | None
+    source_job_id: str | None
     voice_description: str
     reference_text: str
     voice_preview_url: str | None

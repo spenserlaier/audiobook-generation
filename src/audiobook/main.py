@@ -88,6 +88,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/jobs", response_model=Job, status_code=status.HTTP_202_ACCEPTED)
     async def create_job(request: CreateJob) -> Job:
+        if request.source_job_id:
+            try:
+                store.get(request.source_job_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail="Source job not found") from exc
+            if not store.chapters(request.source_job_id):
+                raise HTTPException(status_code=409, detail="Source job has no saved chapters")
         if request.voice_id:
             try:
                 voice = store.get_voice(request.voice_id)

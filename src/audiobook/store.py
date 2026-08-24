@@ -49,6 +49,7 @@ class JobStore:
                 "voice_preview_url": "TEXT",
                 "voice_id": "TEXT",
                 "hidden": "INTEGER NOT NULL DEFAULT 0",
+                "source_job_id": "TEXT",
             }
             for name, definition in migrations.items():
                 if name not in columns:
@@ -80,8 +81,8 @@ class JobStore:
                        voice_instruction, status, stage, progress, chapters_total,
                        chapters_completed, error, output_dir, created_at, updated_at,
                        synthesis_mode, voice_description, reference_text,
-                       voice_preview_url, voice_id
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       voice_preview_url, voice_id, source_job_id
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     job_id,
                     str(request.novel_url),
@@ -104,6 +105,7 @@ class JobStore:
                     request.reference_text,
                     None,
                     request.voice_id,
+                    request.source_job_id,
                 ),
             )
         return self.get(job_id)

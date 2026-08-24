@@ -23,9 +23,21 @@ class Pipeline:
             if cancel_event.is_set():
                 raise CrawlCancelled("Job cancelled")
             self.store.update(
-                job.id, status=JobStatus.CRAWLING, stage="Crawling novel", progress=0.02, error=None
+                job.id,
+                status=JobStatus.CRAWLING,
+                stage=("Loading saved chapters" if job.source_job_id else "Crawling novel"),
+                progress=0.02,
+                error=None,
             )
-            if self.settings.mock_pipeline:
+            if job.source_job_id:
+                saved = self.store.chapters(job.source_job_id)
+                chapters = [
+                    Chapter(index=item.index, title=item.title, text=item.text)
+                    for item in saved
+                ]
+                if job.chapter_limit:
+                    chapters = chapters[: job.chapter_limit]
+            elif self.settings.mock_pipeline:
                 total = job.chapter_limit or 3
                 chapters = [
                     Chapter(

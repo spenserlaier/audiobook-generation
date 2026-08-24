@@ -16,6 +16,7 @@ def test_job_and_chapter_state_persists(tmp_path):
     assert reopened.get(job.id).status == JobStatus.SYNTHESIZING
     assert reopened.chapters(job.id)[0].audio_url == "/audio"
     assert reopened.get(job.id).synthesis_mode == SynthesisMode.DESIGNED_CLONE
+    assert reopened.get(job.id).source_job_id is None
 
 
 def test_recovery_cancels_interrupted_job(tmp_path):

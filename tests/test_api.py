@@ -83,6 +83,58 @@ async def test_queued_jobs_can_be_cancelled(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_job_can_regenerate_from_saved_chapters(tmp_path):
+    app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            source = (
+                await client.post(
+                    "/api/jobs",
+                    json={"novel_url": "https://example.com/source", "chapter_limit": 3},
+                )
+            ).json()
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                source = (await client.get(f"/api/jobs/{source['id']}")).json()
+                if source["status"] in {"completed", "failed"}:
+                    break
+                await asyncio.sleep(0.02)
+            assert source["status"] == "completed", source
+
+            regenerated = (
+                await client.post(
+                    "/api/jobs",
+                    json={
+                        "novel_url": source["novel_url"],
+                        "title": "New performance",
+                        "chapter_limit": 2,
+                        "source_job_id": source["id"],
+                        "synthesis_mode": "custom_voice",
+                        "speaker": "Aiden",
+                    },
+                )
+            ).json()
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                regenerated = (
+                    await client.get(f"/api/jobs/{regenerated['id']}")
+                ).json()
+                if regenerated["status"] in {"completed", "failed"}:
+                    break
+                await asyncio.sleep(0.02)
+            assert regenerated["status"] == "completed", regenerated
+            assert regenerated["source_job_id"] == source["id"]
+            assert regenerated["title"] == "New performance"
+            assert regenerated["chapters_total"] == 2
+            chapters = (
+                await client.get(f"/api/jobs/{regenerated['id']}/chapters")
+            ).json()
+            assert [chapter["title"] for chapter in chapters] == ["Chapter 1", "Chapter 2"]
+
+
+@pytest.mark.anyio
 async def test_reusable_voice_preview_and_job_download(tmp_path, monkeypatch):
     conversion_lock = threading.Lock()
     active_conversions = 0

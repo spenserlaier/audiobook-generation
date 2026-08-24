@@ -1,6 +1,7 @@
 const jobsEl = document.querySelector('#jobs');
 const voicesEl = document.querySelector('#voices');
 const storageEl = document.querySelector('#storage');
+let regenerationSourceId = null;
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
 const chapterRow = chapter => `<div class="chapter"><span>${escapeHtml(chapter.title)} <small>· ${escapeHtml(chapter.status)}</small></span>${chapter.audio_url ? `<div class="audio-actions"><audio controls preload="none" src="${chapter.audio_url}"></audio><a class="download" href="${chapter.audio_url}" download>Download WAV</a></div>` : ''}</div>`;
@@ -33,7 +34,7 @@ async function refresh() {
   const response = await fetch('/api/jobs');
   const jobs = await response.json();
   if (!jobs.length) { jobsEl.innerHTML = '<p class="empty">No jobs yet.</p>'; return; }
-  const cards = jobs.map(job => `<article class="job"><div class="job-head"><div><h3>${escapeHtml(job.title || 'Untitled audiobook')}</h3><small>${escapeHtml(job.novel_url)}</small></div><div class="job-controls"><strong>${escapeHtml(job.status)}</strong>${['queued','crawling','synthesizing'].includes(job.status) ? `<button class="danger cancel-job" data-job-id="${job.id}" type="button">Cancel</button>` : ''}<button class="quiet remove-job" data-job-id="${job.id}" type="button">Remove from list</button></div></div><div class="bar"><span style="width:${Math.round(job.progress*100)}%"></span></div><small>${escapeHtml(job.stage)} · ${Math.round(job.progress*100)}%</small>${archiveControl(job)}${job.voice_preview_url ? `<div class="chapter"><span>Designed voice preview</span><audio controls preload="none" src="${job.voice_preview_url}"></audio></div>` : ''}${job.error ? `<p class="failed">${escapeHtml(job.error)}</p>` : ''}${chapterPanel(job)}</article>`);
+  const cards = jobs.map(job => `<article class="job"><div class="job-head"><div><h3>${escapeHtml(job.title || 'Untitled audiobook')}</h3><small>${escapeHtml(job.novel_url)}</small></div><div class="job-controls"><strong>${escapeHtml(job.status)}</strong>${job.chapters_total && !['queued','crawling','synthesizing'].includes(job.status) ? `<button class="quiet regenerate-job" data-job-id="${job.id}" type="button">Regenerate</button>` : ''}${['queued','crawling','synthesizing'].includes(job.status) ? `<button class="danger cancel-job" data-job-id="${job.id}" type="button">Cancel</button>` : ''}<button class="quiet remove-job" data-job-id="${job.id}" type="button">Remove from list</button></div></div><div class="bar"><span style="width:${Math.round(job.progress*100)}%"></span></div><small>${escapeHtml(job.stage)} · ${Math.round(job.progress*100)}%</small>${archiveControl(job)}${job.voice_preview_url ? `<div class="chapter"><span>Designed voice preview</span><audio controls preload="none" src="${job.voice_preview_url}"></audio></div>` : ''}${job.error ? `<p class="failed">${escapeHtml(job.error)}</p>` : ''}${chapterPanel(job)}</article>`);
   jobsEl.innerHTML = cards.join('');
   await refreshArchiveStatuses();
 }
@@ -77,10 +78,10 @@ document.querySelector('#job-form').addEventListener('submit', async event => {
   event.preventDefault(); const error = document.querySelector('#form-error'); error.textContent = '';
   const limit = document.querySelector('#chapter-limit').value;
   const chapterLimit = document.querySelector('#chapter-scope').value === 'all' ? null : Number(limit);
-  const body = { novel_url:document.querySelector('#novel-url').value, title:document.querySelector('#title').value || null, chapter_limit:chapterLimit, language:document.querySelector('#language').value, synthesis_mode:document.querySelector('#synthesis-mode').value, voice_id:document.querySelector('#voice-id').value || null, voice_description:document.querySelector('#voice-description').value, reference_text:document.querySelector('#reference-text').value, speaker:document.querySelector('#speaker').value, voice_instruction:document.querySelector('#instruction').value };
+  const body = { novel_url:document.querySelector('#novel-url').value, title:document.querySelector('#title').value || null, chapter_limit:chapterLimit, language:document.querySelector('#language').value, synthesis_mode:document.querySelector('#synthesis-mode').value, voice_id:document.querySelector('#voice-id').value || null, source_job_id:regenerationSourceId, voice_description:document.querySelector('#voice-description').value, reference_text:document.querySelector('#reference-text').value, speaker:document.querySelector('#speaker').value, voice_instruction:document.querySelector('#instruction').value };
   const response = await fetch('/api/jobs', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body)});
   if (!response.ok) { const detail = await response.json(); error.textContent = JSON.stringify(detail.detail); return; }
-  event.target.reset(); document.querySelector('#chapter-limit').value = 3; document.querySelector('#chapter-limit-field').hidden = false; document.querySelector('#language').value = 'Auto'; await refresh();
+  event.target.reset(); regenerationSourceId = null; document.querySelector('#regeneration-note').hidden = true; document.querySelector('#chapter-limit').value = 3; document.querySelector('#chapter-limit-field').hidden = false; document.querySelector('#language').value = 'Auto'; await refresh();
 });
 document.querySelector('#chapter-scope').addEventListener('change', event => {
   const limited = event.target.value === 'first';
@@ -106,6 +107,29 @@ jobsEl.addEventListener('click', async event => {
     if (!response.ok) { const detail = await response.json(); alert(detail.detail); }
     await refresh(); return;
   }
+  const regenerate = event.target.closest('.regenerate-job');
+  if (regenerate) {
+    const response = await fetch(`/api/jobs/${regenerate.dataset.jobId}`);
+    const job = await response.json();
+    regenerationSourceId = job.id;
+    document.querySelector('#regeneration-title').textContent = job.title || 'Untitled audiobook';
+    document.querySelector('#regeneration-note').hidden = false;
+    document.querySelector('#novel-url').value = job.novel_url;
+    document.querySelector('#title').value = job.title || '';
+    document.querySelector('#language').value = job.language;
+    document.querySelector('#chapter-scope').value = 'all';
+    document.querySelector('#chapter-limit-field').hidden = true;
+    document.querySelector('#chapter-limit').required = false;
+    document.querySelector('#synthesis-mode').value = job.synthesis_mode;
+    document.querySelector('#voice-id').value = job.voice_id || '';
+    document.querySelector('#voice-description').value = job.voice_description;
+    document.querySelector('#reference-text').value = job.reference_text;
+    document.querySelector('#speaker').value = job.speaker;
+    document.querySelector('#instruction').value = job.voice_instruction;
+    document.querySelector('#synthesis-mode').dispatchEvent(new Event('change'));
+    document.querySelector('#job-form').scrollIntoView({behavior:'smooth'});
+    return;
+  }
   const button = event.target.closest('.remove-job');
   if (button) {
     await fetch(`/api/jobs/${button.dataset.jobId}`, {method:'DELETE'});
@@ -121,6 +145,10 @@ jobsEl.addEventListener('click', async event => {
   }
   const load = event.target.closest('.load-chapters');
   if (load) await loadChapterBatch(load.closest('.chapter-panel'));
+});
+document.querySelector('#cancel-regeneration').addEventListener('click', () => {
+  regenerationSourceId = null;
+  document.querySelector('#regeneration-note').hidden = true;
 });
 jobsEl.addEventListener('change', async event => {
   if (!event.target.matches('.archive-format')) return;

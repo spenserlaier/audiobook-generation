@@ -23,6 +23,7 @@
     </section>
     <section class="panel generate-view">
       <form id="job-form">
+        <div id="regeneration-note" class="notice" hidden><span>Using saved chapters from <strong id="regeneration-title"></strong>; the crawler will be skipped.</span><button class="quiet" id="cancel-regeneration" type="button">Use a new crawl</button></div>
         <label>Novel URL<input id="novel-url" type="url" required placeholder="https://supported-site.example/novel"></label>
         <div class="row">
           <label>Title (optional)<input id="title" maxlength="300" placeholder="Use a friendly library title"></label>
