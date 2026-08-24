@@ -82,6 +82,7 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_CRAWLER_COMMAND` | `audiobook-lncrawl` | Crawler compatibility launcher |
 | `AUDIOBOOK_FFMPEG_COMMAND` | `ffmpeg` | FFmpeg executable used for MP3 archive exports |
 | `AUDIOBOOK_MP3_BITRATE` | `128k` | MP3 archive export bitrate |
+| `AUDIOBOOK_MP3_WORKERS` | `4` | Concurrent single-threaded FFmpeg chapter encoders |
 | `AUDIOBOOK_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | Optional built-in voice model |
 | `AUDIOBOOK_VOICE_DESIGN_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` | Narrative voice design model |
 | `AUDIOBOOK_VOICE_CLONE_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | Designed-voice cloning model |
