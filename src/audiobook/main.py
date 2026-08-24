@@ -1,4 +1,6 @@
+import re
 import shutil
+import unicodedata
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -65,6 +67,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             media_type=media_type,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+    def archive_filename(title: str | None, output_format: str) -> str:
+        normalized = unicodedata.normalize("NFKD", title or "")
+        ascii_title = normalized.encode("ascii", "ignore").decode("ascii").lower()
+        slug = re.sub(r"[^a-z0-9]+", "-", ascii_title).strip("-")[:100].rstrip("-")
+        return f"{slug or 'audiobook'}-{output_format}.zip"
 
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:
@@ -233,7 +241,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Audiobook ZIP is not ready")
         archive = archives.archive_path(job.id, output_format)
         return stream_file(
-            archive, "application/zip", f"audiobook-{output_format}.zip"
+            archive, "application/zip", archive_filename(job.title, output_format)
         )
 
     @app.post("/api/voices", response_model=Voice, status_code=status.HTTP_202_ACCEPTED)

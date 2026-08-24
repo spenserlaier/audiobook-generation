@@ -124,6 +124,7 @@ async def test_reusable_voice_preview_and_job_download(tmp_path, monkeypatch):
                 "/api/jobs",
                 json={
                     "novel_url": "https://example.com/novel",
+                    "title": "Night's Café: A Story!",
                     "chapter_limit": 2,
                     "voice_id": voice_id,
                 },
@@ -158,6 +159,10 @@ async def test_reusable_voice_preview_and_job_download(tmp_path, monkeypatch):
             assert archive_status["download_url"].endswith("/download?format=mp3")
             archive = await client.get(archive_status["download_url"])
             assert archive.status_code == 200
+            assert (
+                archive.headers["content-disposition"]
+                == 'attachment; filename="night-s-cafe-a-story-mp3.zip"'
+            )
             with ZipFile(BytesIO(archive.content)) as bundle:
                 assert bundle.namelist() == ["chapter-0001.mp3", "chapter-0002.mp3"]
             completed_size = archive_status["size_bytes"]
@@ -182,6 +187,9 @@ async def test_reusable_voice_preview_and_job_download(tmp_path, monkeypatch):
                 await asyncio.sleep(0.02)
             assert wav_status["state"] == "ready", wav_status
             wav_archive = await client.get(wav_status["download_url"])
+            assert wav_archive.headers["content-disposition"].endswith(
+                'filename="night-s-cafe-a-story-wav.zip"'
+            )
             with ZipFile(BytesIO(wav_archive.content)) as bundle:
                 assert bundle.namelist() == ["chapter-0001.wav", "chapter-0002.wav"]
 
