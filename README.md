@@ -108,6 +108,9 @@ disk usage per run and can permanently remove its generated WAV, voice-reference
 retaining the job history in SQLite. Bulk controls clear the job list or all finished-run artifacts;
 active generation is never cancelled or deleted. Chapter lists start collapsed and fetch 50 records
 at a time when expanded, keeping large libraries responsive.
+Normalized chapter text remains in SQLite after generated files are cleared. A completed or cancelled
+job with saved chapters can be regenerated into a new configurable job, using a different title,
+chapter limit, language, or voice without running the crawler again.
 While the crawler is running, the job stage reports downloaded and discovered chapter counts from
 the crawler's persisted state instead of remaining at an unexplained fixed percentage.
 
