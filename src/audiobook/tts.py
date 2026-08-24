@@ -113,20 +113,28 @@ class QwenSynthesizer:
         )
 
     def _generation_options(self, attempt: int = 0) -> dict[str, int | float | bool]:
-        return {
+        options: dict[str, int | float | bool] = {
             "max_new_tokens": self.settings.tts_max_new_tokens,
             "do_sample": True,
             "top_k": self.settings.tts_top_k,
             "top_p": self.settings.tts_top_p,
             "temperature": max(0.6, self.settings.tts_temperature - 0.05 * attempt),
             "repetition_penalty": self.settings.tts_repetition_penalty + 0.02 * attempt,
-            "subtalker_dosample": True,
-            "subtalker_top_k": self.settings.tts_top_k,
-            "subtalker_top_p": self.settings.tts_top_p,
-            "subtalker_temperature": max(
-                0.6, self.settings.tts_subtalker_temperature - 0.05 * attempt
-            ),
         }
+        # faster-qwen3-tts exposes only the main-talker sampling arguments.
+        # The official backend forwards its extra kwargs to the subtalker model.
+        if self.settings.tts_backend == "official":
+            options.update(
+                {
+                    "subtalker_dosample": True,
+                    "subtalker_top_k": self.settings.tts_top_k,
+                    "subtalker_top_p": self.settings.tts_top_p,
+                    "subtalker_temperature": max(
+                        0.6, self.settings.tts_subtalker_temperature - 0.05 * attempt
+                    ),
+                }
+            )
+        return options
 
     @staticmethod
     def _duration_limit(text: str) -> float:

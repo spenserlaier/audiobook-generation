@@ -130,3 +130,39 @@ def test_faster_backend_builds_prompt_with_wrapped_upstream_model(monkeypatch, t
     prompt = synthesizer.create_clone_prompt(tmp_path / "reference.wav", "reference")
 
     assert prompt is expected
+
+
+def test_faster_voice_design_omits_unsupported_subtalker_options(monkeypatch, tmp_path):
+    calls = []
+
+    class FakeModel:
+        def generate_voice_design(self, **kwargs):
+            calls.append(kwargs)
+            return [[0.0]], 16_000
+
+    class FakeSoundFile:
+        @staticmethod
+        def write(path, wav, sample_rate):
+            write_mock_wav(path, "preview", sample_rate)
+
+    synthesizer = QwenSynthesizer(
+        Settings(data_dir=tmp_path, tts_backend="faster")
+    )
+    monkeypatch.setattr(synthesizer, "_dependencies", lambda: (None, FakeSoundFile, None))
+    monkeypatch.setattr(synthesizer, "_load", lambda _: FakeModel())
+
+    synthesizer.design_voice("Preview text", "Warm narrator", "English", tmp_path / "voice.wav")
+
+    assert calls[0]["temperature"] == 0.75
+    assert not any(key.startswith("subtalker_") for key in calls[0])
+
+
+def test_official_backend_keeps_subtalker_options(tmp_path):
+    synthesizer = QwenSynthesizer(
+        Settings(data_dir=tmp_path, tts_backend="official")
+    )
+
+    options = synthesizer._generation_options()
+
+    assert options["subtalker_dosample"] is True
+    assert options["subtalker_temperature"] == 0.75
