@@ -1,3 +1,5 @@
+import json
+
 from audiobook.audio import write_mock_wav
 from audiobook.config import Settings
 from audiobook.tts import QwenSynthesizer, resolve_attention
@@ -35,6 +37,41 @@ def test_clone_synthesis_creates_missing_output_directory(monkeypatch, tmp_path)
     synthesizer.synthesize_clone("Chapter text", output, "English", object())
 
     assert output.is_file()
+    assert output.with_suffix(".quality.json").is_file()
+
+
+def test_clone_synthesis_retries_runaway_duration_with_safer_sampling(
+    monkeypatch, tmp_path
+):
+    calls = []
+
+    class FakeModel:
+        def generate_voice_clone(self, **kwargs):
+            calls.append(kwargs)
+            length = 300 if len(calls) == 1 else 100
+            return [[0.0] * length], 10
+
+    class FakeSoundFile:
+        @staticmethod
+        def write(path, wav, sample_rate):
+            write_mock_wav(path, "audio", sample_rate)
+
+    settings = Settings(data_dir=tmp_path, tts_quality_retries=2)
+    synthesizer = QwenSynthesizer(settings)
+    monkeypatch.setattr(synthesizer, "_dependencies", lambda: (None, FakeSoundFile, None))
+    monkeypatch.setattr(synthesizer, "_load", lambda _: FakeModel())
+    output = tmp_path / "chapter.wav"
+
+    synthesizer.synthesize_clone("A short sentence.", output, "English", object())
+
+    assert len(calls) == 2
+    assert calls[0]["temperature"] == 0.75
+    assert calls[1]["temperature"] == 0.7
+    assert calls[0]["repetition_penalty"] == 1.08
+    assert calls[1]["repetition_penalty"] == 1.1
+    manifest = json.loads(output.with_suffix(".quality.json").read_text())
+    assert manifest["chunks"][0]["attempts"][0]["rejected_as_runaway"] is True
+    assert manifest["chunks"][0]["attempts"][1]["rejected_as_runaway"] is False
 
 
 def test_faster_backend_uses_cuda_graph_compatible_load_options(monkeypatch, tmp_path):

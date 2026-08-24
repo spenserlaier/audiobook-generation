@@ -1,5 +1,7 @@
 import gc
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
 
@@ -110,8 +112,61 @@ class QwenSynthesizer:
             ref_audio=str(reference_audio), ref_text=reference_text, x_vector_only_mode=False
         )
 
-    def _generation_options(self) -> dict[str, int]:
-        return {"max_new_tokens": self.settings.tts_max_new_tokens}
+    def _generation_options(self, attempt: int = 0) -> dict[str, int | float | bool]:
+        return {
+            "max_new_tokens": self.settings.tts_max_new_tokens,
+            "do_sample": True,
+            "top_k": self.settings.tts_top_k,
+            "top_p": self.settings.tts_top_p,
+            "temperature": max(0.6, self.settings.tts_temperature - 0.05 * attempt),
+            "repetition_penalty": self.settings.tts_repetition_penalty + 0.02 * attempt,
+            "subtalker_dosample": True,
+            "subtalker_top_k": self.settings.tts_top_k,
+            "subtalker_top_p": self.settings.tts_top_p,
+            "subtalker_temperature": max(
+                0.6, self.settings.tts_subtalker_temperature - 0.05 * attempt
+            ),
+        }
+
+    @staticmethod
+    def _duration_limit(text: str) -> float:
+        # Roughly 150 words/minute, with generous headroom for dramatic narration.
+        expected = max(1, len(text.split())) / 2.5
+        return max(20.0, expected * 1.75 + 10.0)
+
+    def _generate_with_retries(self, text: str, generate: Any) -> tuple[Any, int, dict[str, Any]]:
+        attempts: list[dict[str, Any]] = []
+        candidates: list[tuple[float, Any, int]] = []
+        duration_limit = self._duration_limit(text)
+        for attempt in range(self.settings.tts_quality_retries + 1):
+            options = self._generation_options(attempt)
+            wavs, sample_rate = generate(options)
+            wav = wavs[0]
+            duration = len(wav) / sample_rate
+            rejected = duration > duration_limit
+            attempts.append(
+                {
+                    "attempt": attempt + 1,
+                    "duration_seconds": round(duration, 3),
+                    "duration_limit_seconds": round(duration_limit, 3),
+                    "rejected_as_runaway": rejected,
+                    "temperature": options["temperature"],
+                    "repetition_penalty": options["repetition_penalty"],
+                }
+            )
+            candidates.append((duration, wav, sample_rate))
+            if not rejected:
+                return wav, sample_rate, {"attempts": attempts, "warning": None}
+        _, wav, sample_rate = min(candidates, key=lambda item: item[0])
+        return wav, sample_rate, {
+            "attempts": attempts,
+            "warning": "All candidates exceeded the conservative duration limit; shortest retained",
+        }
+
+    @staticmethod
+    def _write_quality_manifest(output: Path, chunks: list[dict[str, Any]]) -> None:
+        manifest = output.with_suffix(".quality.json")
+        manifest.write_text(json.dumps({"chunks": chunks}, indent=2), encoding="utf-8")
 
     def synthesize_clone(
         self, text: str, output: Path, language: str, voice_clone_prompt: Any
@@ -120,17 +175,29 @@ class QwenSynthesizer:
         model = self._load(self.settings.voice_clone_model)
         output.parent.mkdir(parents=True, exist_ok=True)
         parts: list[Path] = []
+        quality: list[dict[str, Any]] = []
         for index, chunk in enumerate(split_text(text, self.settings.chunk_chars), 1):
-            wavs, sample_rate = model.generate_voice_clone(
-                text=chunk,
-                language=language,
-                voice_clone_prompt=voice_clone_prompt,
-                **self._generation_options(),
+            wav, sample_rate, result = self._generate_with_retries(
+                chunk,
+                lambda options, chunk=chunk: model.generate_voice_clone(
+                    text=chunk,
+                    language=language,
+                    voice_clone_prompt=voice_clone_prompt,
+                    **options,
+                ),
             )
             part = output.parent / f".{output.stem}.part-{index:04d}.wav"
-            sf.write(part, wavs[0], sample_rate)
+            sf.write(part, wav, sample_rate)
             parts.append(part)
+            quality.append(
+                {
+                    "index": index,
+                    "text_sha256": hashlib.sha256(chunk.encode()).hexdigest(),
+                    **result,
+                }
+            )
         self._finish_parts(parts, output)
+        self._write_quality_manifest(output, quality)
 
     def synthesize_custom(
         self,
@@ -144,18 +211,30 @@ class QwenSynthesizer:
         model = self._load(self.settings.tts_model)
         output.parent.mkdir(parents=True, exist_ok=True)
         parts: list[Path] = []
+        quality: list[dict[str, Any]] = []
         for index, chunk in enumerate(split_text(text, self.settings.chunk_chars), 1):
-            wavs, sample_rate = model.generate_custom_voice(
-                text=chunk,
-                language=language,
-                speaker=speaker,
-                instruct=instruction,
-                **self._generation_options(),
+            wav, sample_rate, result = self._generate_with_retries(
+                chunk,
+                lambda options, chunk=chunk: model.generate_custom_voice(
+                    text=chunk,
+                    language=language,
+                    speaker=speaker,
+                    instruct=instruction,
+                    **options,
+                ),
             )
             part = output.parent / f".{output.stem}.part-{index:04d}.wav"
-            sf.write(part, wavs[0], sample_rate)
+            sf.write(part, wav, sample_rate)
             parts.append(part)
+            quality.append(
+                {
+                    "index": index,
+                    "text_sha256": hashlib.sha256(chunk.encode()).hexdigest(),
+                    **result,
+                }
+            )
         self._finish_parts(parts, output)
+        self._write_quality_manifest(output, quality)
 
     @staticmethod
     def _finish_parts(parts: list[Path], output: Path) -> None:

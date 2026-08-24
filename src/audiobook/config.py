@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     tts_attention: str = "auto"
     tts_max_seq_len: int = Field(default=2048, ge=256)
     tts_max_new_tokens: int = Field(default=2048, ge=1)
+    tts_temperature: float = Field(default=0.75, gt=0, le=2)
+    tts_top_p: float = Field(default=0.95, gt=0, le=1)
+    tts_top_k: int = Field(default=50, ge=1)
+    tts_repetition_penalty: float = Field(default=1.08, ge=1, le=2)
+    tts_subtalker_temperature: float = Field(default=0.75, gt=0, le=2)
+    tts_quality_retries: int = Field(default=2, ge=0, le=5)
     chunk_chars: int = Field(default=1200, ge=1)
     mock_pipeline: bool = False
     worker_count: int = Field(default=1, ge=1)
