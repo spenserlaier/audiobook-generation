@@ -1,6 +1,7 @@
 import asyncio
 import time
 from io import BytesIO
+from pathlib import Path
 from zipfile import ZipFile
 
 import httpx
@@ -81,7 +82,12 @@ async def test_queued_jobs_can_be_cancelled(tmp_path):
 
 
 @pytest.mark.anyio
-async def test_reusable_voice_preview_and_job_download(tmp_path):
+async def test_reusable_voice_preview_and_job_download(tmp_path, monkeypatch):
+    def fake_ffmpeg(args, **_kwargs):
+        source = Path(args[args.index("-i") + 1])
+        Path(args[-1]).write_bytes(source.read_bytes())
+
+    monkeypatch.setattr("audiobook.archive.subprocess.run", fake_ffmpeg)
     app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(
@@ -121,6 +127,7 @@ async def test_reusable_voice_preview_and_job_download(tmp_path):
             assert job["voice_preview_url"] == voice["preview_url"]
             status_response = await client.get(f"/api/jobs/{job_id}/download/status")
             assert status_response.json()["state"] == "idle"
+            assert status_response.json()["format"] == "mp3"
             assert (await client.get(f"/api/jobs/{job_id}/download")).status_code == 409
             response = await client.post(f"/api/jobs/{job_id}/download/prepare")
             assert response.status_code == 200
@@ -134,16 +141,35 @@ async def test_reusable_voice_preview_and_job_download(tmp_path):
                 await asyncio.sleep(0.02)
             assert archive_status["state"] == "ready", archive_status
             assert archive_status["completed_files"] == 2
-            assert archive_status["download_url"].endswith("/download")
+            assert archive_status["download_url"].endswith("/download?format=mp3")
             archive = await client.get(archive_status["download_url"])
             assert archive.status_code == 200
             with ZipFile(BytesIO(archive.content)) as bundle:
-                assert bundle.namelist() == ["chapter-0001.wav", "chapter-0002.wav"]
+                assert bundle.namelist() == ["chapter-0001.mp3", "chapter-0002.mp3"]
             completed_size = archive_status["size_bytes"]
             response = await client.post(f"/api/jobs/{job_id}/download/prepare")
             assert response.json()["state"] == "ready"
             assert response.json()["size_bytes"] == completed_size
-            assert not (tmp_path / "jobs" / job_id / ".audiobook.zip.part").exists()
+            assert not (
+                tmp_path / "jobs" / job_id / ".audiobook-mp3.zip.part"
+            ).exists()
+
+            response = await client.post(
+                f"/api/jobs/{job_id}/download/prepare?format=wav"
+            )
+            assert response.json()["format"] == "wav"
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                wav_status = (
+                    await client.get(f"/api/jobs/{job_id}/download/status?format=wav")
+                ).json()
+                if wav_status["state"] in {"ready", "failed"}:
+                    break
+                await asyncio.sleep(0.02)
+            assert wav_status["state"] == "ready", wav_status
+            wav_archive = await client.get(wav_status["download_url"])
+            with ZipFile(BytesIO(wav_archive.content)) as bundle:
+                assert bundle.namelist() == ["chapter-0001.wav", "chapter-0002.wav"]
 
             storage = (await client.get("/api/storage")).json()
             entry = next(item for item in storage if item["job_id"] == job_id)

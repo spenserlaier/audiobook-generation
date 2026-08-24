@@ -5,7 +5,7 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'
 
 const chapterRow = chapter => `<div class="chapter"><span>${escapeHtml(chapter.title)} <small>· ${escapeHtml(chapter.status)}</small></span>${chapter.audio_url ? `<div class="audio-actions"><audio controls preload="none" src="${chapter.audio_url}"></audio><a class="download" href="${chapter.audio_url}" download>Download WAV</a></div>` : ''}</div>`;
 const chapterPanel = job => job.chapters_total ? `<div class="chapter-browser"><button class="quiet toggle-chapters" data-job-id="${job.id}" type="button">Show chapters (${job.chapters_total})</button><div class="chapter-panel" data-job-id="${job.id}" data-offset="0" data-total="${job.chapters_total}" hidden><div class="chapters"></div><button class="quiet load-chapters" type="button">Load next 50</button></div></div>` : '';
-const archiveControl = job => job.status === 'completed' && job.output_dir ? `<div class="archive-control" data-job-id="${job.id}"><button class="quiet prepare-archive" type="button">Prepare ZIP</button></div>` : '';
+const archiveControl = job => job.status === 'completed' && job.output_dir ? `<div class="archive-control" data-job-id="${job.id}"><label>Export format<select class="archive-format"><option value="mp3">MP3</option><option value="wav">WAV</option></select></label><div class="archive-action"><button class="quiet prepare-archive" type="button">Prepare MP3 ZIP</button></div></div>` : '';
 
 async function loadChapterBatch(panel) {
   const offset = Number(panel.dataset.offset);
@@ -46,20 +46,23 @@ const formatBytes = bytes => {
 };
 
 function renderArchiveStatus(control, status) {
+  const action = control.querySelector('.archive-action');
+  const format = status.format.toUpperCase();
   if (status.state === 'ready') {
-    control.innerHTML = `<a class="download" href="${status.download_url}" download>Download ZIP (${formatBytes(status.size_bytes)})</a>`;
+    action.innerHTML = `<a class="download" href="${status.download_url}" download>Download ${format} ZIP (${formatBytes(status.size_bytes)})</a>`;
   } else if (status.state === 'preparing') {
-    control.innerHTML = `<button class="quiet" type="button" disabled>Preparing ZIP… ${status.completed_files}/${status.total_files} chapters</button>`;
+    action.innerHTML = `<button class="quiet" type="button" disabled>Preparing ${format} ZIP… ${status.completed_files}/${status.total_files} chapters</button>`;
   } else if (status.state === 'failed') {
-    control.innerHTML = `<button class="quiet prepare-archive" type="button">Retry ZIP</button><small class="failed">${escapeHtml(status.error)}</small>`;
+    action.innerHTML = `<button class="quiet prepare-archive" type="button">Retry ${format} ZIP</button><small class="failed">${escapeHtml(status.error)}</small>`;
   } else {
-    control.innerHTML = '<button class="quiet prepare-archive" type="button">Prepare ZIP</button>';
+    action.innerHTML = `<button class="quiet prepare-archive" type="button">Prepare ${format} ZIP</button>`;
   }
 }
 
 async function refreshArchiveStatuses() {
   await Promise.all([...jobsEl.querySelectorAll('.archive-control')].map(async control => {
-    const response = await fetch(`/api/jobs/${control.dataset.jobId}/download/status`);
+    const format = control.querySelector('.archive-format').value;
+    const response = await fetch(`/api/jobs/${control.dataset.jobId}/download/status?format=${format}`);
     if (response.ok) renderArchiveStatus(control, await response.json());
   }));
 }
@@ -91,7 +94,8 @@ jobsEl.addEventListener('click', async event => {
   if (prepare) {
     const control = prepare.closest('.archive-control');
     prepare.disabled = true; prepare.textContent = 'Starting ZIP…';
-    const response = await fetch(`/api/jobs/${control.dataset.jobId}/download/prepare`, {method:'POST'});
+    const format = control.querySelector('.archive-format').value;
+    const response = await fetch(`/api/jobs/${control.dataset.jobId}/download/prepare?format=${format}`, {method:'POST'});
     if (!response.ok) { const detail = await response.json(); alert(detail.detail); return; }
     renderArchiveStatus(control, await response.json()); return;
   }
@@ -117,6 +121,12 @@ jobsEl.addEventListener('click', async event => {
   }
   const load = event.target.closest('.load-chapters');
   if (load) await loadChapterBatch(load.closest('.chapter-panel'));
+});
+jobsEl.addEventListener('change', async event => {
+  if (!event.target.matches('.archive-format')) return;
+  const control = event.target.closest('.archive-control');
+  const response = await fetch(`/api/jobs/${control.dataset.jobId}/download/status?format=${event.target.value}`);
+  if (response.ok) renderArchiveStatus(control, await response.json());
 });
 document.querySelector('#clear-jobs').addEventListener('click', async () => {
   if (!confirm('Remove every job from the main list? Generation will continue and files will be kept.')) return;

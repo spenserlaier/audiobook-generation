@@ -1,6 +1,7 @@
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, status
@@ -29,7 +30,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings.prepare()
     store = JobStore(settings.database_path)
     workers = WorkerPool(Pipeline(settings, store), settings.worker_count)
-    archives = ArchiveManager(settings.data_dir)
+    archives = ArchiveManager(
+        settings.data_dir, settings.ffmpeg_command, settings.mp3_bitrate
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -185,32 +188,50 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ]
         return job, files
 
-    def archive_response(job_id: str, total_files: int) -> ArchiveStatus:
-        state = archives.status(job_id, total_files)
+    def archive_response(
+        job_id: str, output_format: str, total_files: int
+    ) -> ArchiveStatus:
+        state = archives.status(job_id, output_format, total_files)
         return ArchiveStatus(
             **vars(state),
-            download_url=(f"/api/jobs/{job_id}/download" if state.state == "ready" else None),
+            format=output_format,
+            download_url=(
+                f"/api/jobs/{job_id}/download?format={output_format}"
+                if state.state == "ready"
+                else None
+            ),
         )
 
     @app.get("/api/jobs/{job_id}/download/status", response_model=ArchiveStatus)
-    async def download_status(job_id: str) -> ArchiveStatus:
+    async def download_status(
+        job_id: str,
+        output_format: Literal["mp3", "wav"] = Query(default="mp3", alias="format"),
+    ) -> ArchiveStatus:
         _, files = archive_job(job_id)
-        return archive_response(job_id, len(files))
+        return archive_response(job_id, output_format, len(files))
 
     @app.post("/api/jobs/{job_id}/download/prepare", response_model=ArchiveStatus)
-    async def prepare_download(job_id: str) -> ArchiveStatus:
+    async def prepare_download(
+        job_id: str,
+        output_format: Literal["mp3", "wav"] = Query(default="mp3", alias="format"),
+    ) -> ArchiveStatus:
         _, files = archive_job(job_id)
-        archives.prepare(job_id, files)
-        return archive_response(job_id, len(files))
+        archives.prepare(job_id, output_format, files)
+        return archive_response(job_id, output_format, len(files))
 
     @app.get("/api/jobs/{job_id}/download")
-    async def download_job(job_id: str) -> StreamingResponse:
+    async def download_job(
+        job_id: str,
+        output_format: Literal["mp3", "wav"] = Query(default="mp3", alias="format"),
+    ) -> StreamingResponse:
         job, files = archive_job(job_id)
-        state = archives.status(job.id, len(files))
+        state = archives.status(job.id, output_format, len(files))
         if state.state != "ready":
             raise HTTPException(status_code=409, detail="Audiobook ZIP is not ready")
-        archive = settings.data_dir / "jobs" / job.id / "audiobook.zip"
-        return stream_file(archive, "application/zip", "audiobook.zip")
+        archive = archives.archive_path(job.id, output_format)
+        return stream_file(
+            archive, "application/zip", f"audiobook-{output_format}.zip"
+        )
 
     @app.post("/api/voices", response_model=Voice, status_code=status.HTTP_202_ACCEPTED)
     async def create_voice(request: CreateVoice) -> Voice:

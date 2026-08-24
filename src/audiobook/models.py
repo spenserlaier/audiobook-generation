@@ -93,6 +93,7 @@ class StorageEntry(BaseModel):
 
 
 class ArchiveStatus(BaseModel):
+    format: str
     state: str
     completed_files: int
     total_files: int

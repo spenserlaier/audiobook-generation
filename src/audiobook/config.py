@@ -8,6 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     data_dir: Path = Path("data")
     crawler_command: str = "audiobook-lncrawl"
+    ffmpeg_command: str = "ffmpeg"
+    mp3_bitrate: str = "128k"
     tts_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
     voice_design_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
     voice_clone_model: str = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
