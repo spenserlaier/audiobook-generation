@@ -92,6 +92,12 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_TTS_ATTENTION` | `auto` | `flash_attention_2` when installed, otherwise `sdpa` |
 | `AUDIOBOOK_TTS_MAX_SEQ_LEN` | `2048` | Static cache length used by the faster backend |
 | `AUDIOBOOK_TTS_MAX_NEW_TOKENS` | `2048` | Per-chunk codec-token generation ceiling |
+| `AUDIOBOOK_TTS_TEMPERATURE` | `0.75` | Main-talker sampling temperature |
+| `AUDIOBOOK_TTS_TOP_P` | `0.95` | Nucleus sampling threshold |
+| `AUDIOBOOK_TTS_TOP_K` | `50` | Top-k sampling limit |
+| `AUDIOBOOK_TTS_REPETITION_PENALTY` | `1.08` | Codec-token repetition penalty |
+| `AUDIOBOOK_TTS_SUBTALKER_TEMPERATURE` | `0.75` | Subtalker sampling temperature |
+| `AUDIOBOOK_TTS_QUALITY_RETRIES` | `2` | Retries for abnormally long chunk output |
 | `AUDIOBOOK_CHUNK_CHARS` | `1200` | Maximum text characters per synthesis call |
 | `AUDIOBOOK_WORKER_COUNT` | `1` | Concurrent background jobs; one is safest for GPU memory |
 | `AUDIOBOOK_TTS_RELEASE_AFTER_JOB` | `true` | Release model and cached VRAM after each job |
