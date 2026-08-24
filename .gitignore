@@ -4,3 +4,5 @@ __pycache__/
 *.py[cod]
 data/
 dist/
+node_modules/
+src/audiobook/static/dist/

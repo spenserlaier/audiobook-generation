@@ -53,8 +53,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.store = store
     app.state.workers = workers
 
-    static_dir = Path(__file__).parent / "static"
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    static_dir = Path(__file__).parent / "static" / "dist"
+    app.mount("/static", StaticFiles(directory=static_dir, check_dir=False), name="static")
 
     def stream_file(path: Path, media_type: str, filename: str) -> StreamingResponse:
         async def chunks():
@@ -76,7 +76,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:
-        return FileResponse(static_dir / "index.html")
+        index_file = static_dir / "index.html"
+        if not index_file.is_file():
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "The frontend has not been built. Run `cd frontend && npm install && "
+                    "npm run build`, or use `npm run dev` and open http://127.0.0.1:5173."
+                ),
+            )
+        return FileResponse(index_file)
 
     @app.get("/api/health")
     async def health() -> dict[str, str | bool]:

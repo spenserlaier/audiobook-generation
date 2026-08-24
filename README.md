@@ -14,6 +14,10 @@ GPU, or model download.
 python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
+cd frontend
+npm install
+npm run build
+cd ..
 AUDIOBOOK_MOCK_PIPELINE=true audiobook-server
 ```
 
@@ -132,9 +136,27 @@ finished database state is never mistaken for a completed file.
 
 ## Development
 
+The browser interface is a Svelte app built with Vite. For live reload, run the API and frontend
+development servers in separate terminals, then open <http://127.0.0.1:5173>:
+
+```bash
+AUDIOBOOK_MOCK_PIPELINE=true audiobook-server
+```
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Vite proxies `/api` requests to the API on port 8000. To use the interface directly from the Python
+server instead, run `npm run build` first and open port 8000. Generated assets are deliberately
+ignored by Git; this keeps personal development builds out of the repository.
+
 ```bash
 pytest
 ruff check .
+cd frontend && npm test && npm run build
 ```
 
 ## Responsible use
