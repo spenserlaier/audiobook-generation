@@ -95,7 +95,9 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_MOCK_PIPELINE` | `false` | Use deterministic local chapters and short tone WAVs |
 
 The UI can generate reusable narrator previews before a novel is submitted. Completed chapters can
-be played or downloaded individually, and completed jobs provide a ZIP containing every WAV.
+be played or downloaded individually. Whole-book ZIPs are prepared by a singleton background task,
+show chapter-count progress, and become downloadable only after an atomic finalization step. Repeated
+requests reuse the active task or completed archive instead of restarting it.
 Jobs can be hidden from the main list without affecting their files. The separate Storage view shows
 disk usage per run and can permanently remove its generated WAV, voice-reference, and ZIP files while
 retaining the job history in SQLite. Bulk controls clear the job list or all finished-run artifacts;
