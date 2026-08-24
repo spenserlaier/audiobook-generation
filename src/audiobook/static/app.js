@@ -5,6 +5,7 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'
 
 const chapterRow = chapter => `<div class="chapter"><span>${escapeHtml(chapter.title)} <small>· ${escapeHtml(chapter.status)}</small></span>${chapter.audio_url ? `<div class="audio-actions"><audio controls preload="none" src="${chapter.audio_url}"></audio><a class="download" href="${chapter.audio_url}" download>Download WAV</a></div>` : ''}</div>`;
 const chapterPanel = job => job.chapters_total ? `<div class="chapter-browser"><button class="quiet toggle-chapters" data-job-id="${job.id}" type="button">Show chapters (${job.chapters_total})</button><div class="chapter-panel" data-job-id="${job.id}" data-offset="0" data-total="${job.chapters_total}" hidden><div class="chapters"></div><button class="quiet load-chapters" type="button">Load next 50</button></div></div>` : '';
+const archiveControl = job => job.status === 'completed' && job.output_dir ? `<div class="archive-control" data-job-id="${job.id}"><button class="quiet prepare-archive" type="button">Prepare ZIP</button></div>` : '';
 
 async function loadChapterBatch(panel) {
   const offset = Number(panel.dataset.offset);
@@ -32,8 +33,9 @@ async function refresh() {
   const response = await fetch('/api/jobs');
   const jobs = await response.json();
   if (!jobs.length) { jobsEl.innerHTML = '<p class="empty">No jobs yet.</p>'; return; }
-  const cards = jobs.map(job => `<article class="job"><div class="job-head"><div><h3>${escapeHtml(job.title || 'Untitled audiobook')}</h3><small>${escapeHtml(job.novel_url)}</small></div><div class="job-controls"><strong>${escapeHtml(job.status)}</strong>${['queued','crawling','synthesizing'].includes(job.status) ? `<button class="danger cancel-job" data-job-id="${job.id}" type="button">Cancel</button>` : ''}<button class="quiet remove-job" data-job-id="${job.id}" type="button">Remove from list</button></div></div><div class="bar"><span style="width:${Math.round(job.progress*100)}%"></span></div><small>${escapeHtml(job.stage)} · ${Math.round(job.progress*100)}%</small>${job.status === 'completed' && job.output_dir ? `<p><a class="download" href="/api/jobs/${job.id}/download" download>Download all chapters (.zip)</a></p>` : ''}${job.voice_preview_url ? `<div class="chapter"><span>Designed voice preview</span><audio controls preload="none" src="${job.voice_preview_url}"></audio></div>` : ''}${job.error ? `<p class="failed">${escapeHtml(job.error)}</p>` : ''}${chapterPanel(job)}</article>`);
+  const cards = jobs.map(job => `<article class="job"><div class="job-head"><div><h3>${escapeHtml(job.title || 'Untitled audiobook')}</h3><small>${escapeHtml(job.novel_url)}</small></div><div class="job-controls"><strong>${escapeHtml(job.status)}</strong>${['queued','crawling','synthesizing'].includes(job.status) ? `<button class="danger cancel-job" data-job-id="${job.id}" type="button">Cancel</button>` : ''}<button class="quiet remove-job" data-job-id="${job.id}" type="button">Remove from list</button></div></div><div class="bar"><span style="width:${Math.round(job.progress*100)}%"></span></div><small>${escapeHtml(job.stage)} · ${Math.round(job.progress*100)}%</small>${archiveControl(job)}${job.voice_preview_url ? `<div class="chapter"><span>Designed voice preview</span><audio controls preload="none" src="${job.voice_preview_url}"></audio></div>` : ''}${job.error ? `<p class="failed">${escapeHtml(job.error)}</p>` : ''}${chapterPanel(job)}</article>`);
   jobsEl.innerHTML = cards.join('');
+  await refreshArchiveStatuses();
 }
 
 const formatBytes = bytes => {
@@ -42,6 +44,25 @@ const formatBytes = bytes => {
   while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
   return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
 };
+
+function renderArchiveStatus(control, status) {
+  if (status.state === 'ready') {
+    control.innerHTML = `<a class="download" href="${status.download_url}" download>Download ZIP (${formatBytes(status.size_bytes)})</a>`;
+  } else if (status.state === 'preparing') {
+    control.innerHTML = `<button class="quiet" type="button" disabled>Preparing ZIP… ${status.completed_files}/${status.total_files} chapters</button>`;
+  } else if (status.state === 'failed') {
+    control.innerHTML = `<button class="quiet prepare-archive" type="button">Retry ZIP</button><small class="failed">${escapeHtml(status.error)}</small>`;
+  } else {
+    control.innerHTML = '<button class="quiet prepare-archive" type="button">Prepare ZIP</button>';
+  }
+}
+
+async function refreshArchiveStatuses() {
+  await Promise.all([...jobsEl.querySelectorAll('.archive-control')].map(async control => {
+    const response = await fetch(`/api/jobs/${control.dataset.jobId}/download/status`);
+    if (response.ok) renderArchiveStatus(control, await response.json());
+  }));
+}
 
 async function refreshStorage() {
   const response = await fetch('/api/storage');
@@ -66,6 +87,14 @@ document.querySelector('#chapter-scope').addEventListener('change', event => {
 document.querySelector('#refresh').addEventListener('click', refresh);
 document.querySelector('#refresh-storage').addEventListener('click', refreshStorage);
 jobsEl.addEventListener('click', async event => {
+  const prepare = event.target.closest('.prepare-archive');
+  if (prepare) {
+    const control = prepare.closest('.archive-control');
+    prepare.disabled = true; prepare.textContent = 'Starting ZIP…';
+    const response = await fetch(`/api/jobs/${control.dataset.jobId}/download/prepare`, {method:'POST'});
+    if (!response.ok) { const detail = await response.json(); alert(detail.detail); return; }
+    renderArchiveStatus(control, await response.json()); return;
+  }
   const cancel = event.target.closest('.cancel-job');
   if (cancel) {
     if (!confirm('Cancel this job? Any current crawler process will be stopped.')) return;
@@ -131,4 +160,4 @@ document.querySelector('#synthesis-mode').addEventListener('change', event => {
   document.querySelector('#designed-voice-fields').hidden = !designed;
   document.querySelector('#custom-voice-fields').hidden = designed;
 });
-refresh(); refreshVoices(); refreshStorage(); setInterval(() => { refresh(); refreshVoices(); }, 2500);
+refresh(); refreshVoices(); refreshStorage(); setInterval(() => { refresh(); refreshVoices(); refreshArchiveStatuses(); }, 2500);

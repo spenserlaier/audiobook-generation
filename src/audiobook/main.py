@@ -1,15 +1,16 @@
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
-from zipfile import ZIP_DEFLATED, ZipFile
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from .archive import ArchiveManager
 from .config import Settings
 from .models import (
+    ArchiveStatus,
     ChapterRecord,
     CreateJob,
     CreateVoice,
@@ -28,6 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings.prepare()
     store = JobStore(settings.database_path)
     workers = WorkerPool(Pipeline(settings, store), settings.worker_count)
+    archives = ArchiveManager(settings.data_dir)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -164,8 +166,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Voice preview is not ready")
         return stream_file(path, "audio/wav", "voice-reference.wav")
 
-    @app.get("/api/jobs/{job_id}/download")
-    async def download_job(job_id: str) -> StreamingResponse:
+    def archive_job(job_id: str) -> tuple[Job, list[Path]]:
         try:
             job = store.get(job_id)
         except KeyError as exc:
@@ -174,19 +175,41 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Audiobook is not complete")
         if not job.output_dir:
             raise HTTPException(status_code=404, detail="Generated files have been removed")
+        files = [
+            settings.data_dir
+            / "jobs"
+            / job.id
+            / "audio"
+            / f"chapter-{chapter.index:04d}.wav"
+            for chapter in store.chapters(job.id)
+        ]
+        return job, files
+
+    def archive_response(job_id: str, total_files: int) -> ArchiveStatus:
+        state = archives.status(job_id, total_files)
+        return ArchiveStatus(
+            **vars(state),
+            download_url=(f"/api/jobs/{job_id}/download" if state.state == "ready" else None),
+        )
+
+    @app.get("/api/jobs/{job_id}/download/status", response_model=ArchiveStatus)
+    async def download_status(job_id: str) -> ArchiveStatus:
+        _, files = archive_job(job_id)
+        return archive_response(job_id, len(files))
+
+    @app.post("/api/jobs/{job_id}/download/prepare", response_model=ArchiveStatus)
+    async def prepare_download(job_id: str) -> ArchiveStatus:
+        _, files = archive_job(job_id)
+        archives.prepare(job_id, files)
+        return archive_response(job_id, len(files))
+
+    @app.get("/api/jobs/{job_id}/download")
+    async def download_job(job_id: str) -> StreamingResponse:
+        job, files = archive_job(job_id)
+        state = archives.status(job.id, len(files))
+        if state.state != "ready":
+            raise HTTPException(status_code=409, detail="Audiobook ZIP is not ready")
         archive = settings.data_dir / "jobs" / job.id / "audiobook.zip"
-        chapters = store.chapters(job.id)
-        with ZipFile(archive, "w", compression=ZIP_DEFLATED) as bundle:
-            for chapter in chapters:
-                path = (
-                    settings.data_dir
-                    / "jobs"
-                    / job.id
-                    / "audio"
-                    / f"chapter-{chapter.index:04d}.wav"
-                )
-                if path.is_file():
-                    bundle.write(path, arcname=path.name)
         return stream_file(archive, "application/zip", "audiobook.zip")
 
     @app.post("/api/voices", response_model=Voice, status_code=status.HTTP_202_ACCEPTED)
@@ -243,6 +266,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Job not found") from exc
         if job.status in {"queued", "crawling", "synthesizing"}:
             raise HTTPException(status_code=409, detail="Cannot delete files for an active job")
+        if archives.is_preparing(job.id):
+            raise HTTPException(status_code=409, detail="Archive preparation is in progress")
         directory = settings.data_dir / "jobs" / job.id
         if directory.is_dir():
             shutil.rmtree(directory)
@@ -254,6 +279,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         skipped_active = 0
         for job in store.list(limit=10_000, include_hidden=True):
             if job.status in {"queued", "crawling", "synthesizing"}:
+                skipped_active += 1
+                continue
+            if archives.is_preparing(job.id):
                 skipped_active += 1
                 continue
             directory = settings.data_dir / "jobs" / job.id

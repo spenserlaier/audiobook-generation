@@ -92,6 +92,15 @@ class StorageEntry(BaseModel):
     size_bytes: int
 
 
+class ArchiveStatus(BaseModel):
+    state: str
+    completed_files: int
+    total_files: int
+    size_bytes: int
+    error: str | None = None
+    download_url: str | None = None
+
+
 class VoiceStatus(StrEnum):
     QUEUED = "queued"
     GENERATING = "generating"

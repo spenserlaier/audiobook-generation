@@ -119,10 +119,31 @@ async def test_reusable_voice_preview_and_job_download(tmp_path):
                 await asyncio.sleep(0.02)
             assert job["status"] == "completed", job
             assert job["voice_preview_url"] == voice["preview_url"]
-            archive = await client.get(f"/api/jobs/{job_id}/download")
+            status_response = await client.get(f"/api/jobs/{job_id}/download/status")
+            assert status_response.json()["state"] == "idle"
+            assert (await client.get(f"/api/jobs/{job_id}/download")).status_code == 409
+            response = await client.post(f"/api/jobs/{job_id}/download/prepare")
+            assert response.status_code == 200
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                archive_status = (
+                    await client.get(f"/api/jobs/{job_id}/download/status")
+                ).json()
+                if archive_status["state"] in {"ready", "failed"}:
+                    break
+                await asyncio.sleep(0.02)
+            assert archive_status["state"] == "ready", archive_status
+            assert archive_status["completed_files"] == 2
+            assert archive_status["download_url"].endswith("/download")
+            archive = await client.get(archive_status["download_url"])
             assert archive.status_code == 200
             with ZipFile(BytesIO(archive.content)) as bundle:
                 assert bundle.namelist() == ["chapter-0001.wav", "chapter-0002.wav"]
+            completed_size = archive_status["size_bytes"]
+            response = await client.post(f"/api/jobs/{job_id}/download/prepare")
+            assert response.json()["state"] == "ready"
+            assert response.json()["size_bytes"] == completed_size
+            assert not (tmp_path / "jobs" / job_id / ".audiobook.zip.part").exists()
 
             storage = (await client.get("/api/storage")).json()
             entry = next(item for item in storage if item["job_id"] == job_id)
