@@ -1,8 +1,27 @@
 <script>
   import { jsonPost, request } from '../api.js';
 
+  const adjectives = ['Airy', 'Amber', 'Bright', 'Breezy', 'Calm', 'Clear', 'Crisp', 'Dreamy', 'Gentle', 'Golden', 'Lively', 'Mellow', 'Quiet', 'Silvery', 'Soft', 'Steady', 'Velvet', 'Warm'];
+  const nouns = ['Badger', 'Bear', 'Finch', 'Fox', 'Heron', 'Lark', 'Lynx', 'Marten', 'Ostrich', 'Otter', 'Owl', 'Puffin', 'Raven', 'Robin', 'Seal', 'Sparrow', 'Wolf', 'Wren'];
+
+  function randomNarratorName(existing = []) {
+    const used = new Set(existing.map((voice) => voice.name));
+    let candidate;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const first = Math.floor(Math.random() * adjectives.length);
+      let second = Math.floor(Math.random() * (adjectives.length - 1));
+      if (second >= first) second++;
+      candidate = `${adjectives[first]} ${adjectives[second]} ${nouns[Math.floor(Math.random() * nouns.length)]}`;
+      if (!used.has(candidate)) return candidate;
+    }
+    let suffix = 2;
+    while (used.has(`${candidate} ${suffix}`)) suffix++;
+    return `${candidate} ${suffix}`;
+  }
+
   let { voices, onChanged } = $props();
-  let name = $state('Narrator');
+  let name = $state(randomNarratorName());
+  let nameEdited = $state(false);
   let language = $state('Auto');
   let ttsProvider = $state('qwen');
   let description = $state('A compelling, warm audiobook narrator with a clear mid-low register, measured pacing, subtle emotional range, crisp diction, and an intimate storytelling tone.');
@@ -12,11 +31,18 @@
   let editingId = $state(null);
   let editingName = $state('');
 
+  $effect(() => {
+    if (!nameEdited && voices.some((voice) => voice.name === name)) name = randomNarratorName(voices);
+  });
+
   async function submit() {
     error = ''; submitting = true;
     try {
+      const submittedName = name;
       await jsonPost('/api/voices', {name, language, tts_provider: ttsProvider, description, reference_text: referenceText});
       await onChanged();
+      name = randomNarratorName([...voices, {name: submittedName}]);
+      nameEdited = false;
     } catch (exc) { error = exc.message; }
     finally { submitting = false; }
   }
@@ -70,7 +96,7 @@
   <p class="hint">Generate and audition a reusable voice before choosing a novel.</p>
   <form onsubmit={(event) => { event.preventDefault(); submit(); }}>
     <div class="row">
-      <label>Voice name<input bind:value={name} maxlength="120" required /></label>
+      <label>Voice name<input bind:value={name} oninput={() => nameEdited = true} maxlength="120" required /></label>
       <label>Language<input bind:value={language} /></label>
     </div>
     <label>TTS model<select bind:value={ttsProvider}><option value="qwen">Qwen3-TTS</option><option value="breeze">Breeze TTS 2</option></select></label>
