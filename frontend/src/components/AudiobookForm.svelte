@@ -8,6 +8,7 @@
   let chapterLimit = $state(3);
   let language = $state('Auto');
   let synthesisMode = $state('designed_clone');
+  let ttsProvider = $state('qwen');
   let voiceId = $state('');
   let voiceDescription = $state('A compelling, warm audiobook narrator with a clear mid-low register, measured pacing, subtle emotional range, crisp diction, and an intimate storytelling tone.');
   let referenceText = $state('The road disappeared into the evening mist, and with every quiet step, the old world fell farther behind. Ahead waited a story no one had dared to tell.');
@@ -25,6 +26,7 @@
       chapterScope = 'all';
       language = sourceJob.language;
       synthesisMode = sourceJob.synthesis_mode;
+      ttsProvider = sourceJob.tts_provider;
       voiceId = sourceJob.voice_id ?? '';
       voiceDescription = sourceJob.voice_description;
       referenceText = sourceJob.reference_text;
@@ -41,7 +43,7 @@
       await jsonPost('/api/jobs', {
         novel_url: novelUrl, title: title || null,
         chapter_limit: chapterScope === 'all' ? null : Number(chapterLimit),
-        language, synthesis_mode: synthesisMode, voice_id: voiceId || null,
+        language, synthesis_mode: synthesisMode, tts_provider: ttsProvider, voice_id: voiceId || null,
         source_job_id: sourceJob?.id ?? null, voice_description: voiceDescription,
         reference_text: referenceText, speaker, voice_instruction: instruction,
       });
@@ -63,14 +65,22 @@
     {#if chapterScope === 'first'}<label>Number of chapters<input bind:value={chapterLimit} type="number" min="1" max="10000" required /></label>{/if}
     <div class="row">
       <label>Language<input bind:value={language} /></label>
-      <label>Voice workflow<select bind:value={synthesisMode}><option value="designed_clone">Design + clone (recommended)</option><option value="custom_voice">Built-in Qwen voice</option></select></label>
+      <label>TTS model<select bind:value={ttsProvider} onchange={() => { voiceId = ''; if (ttsProvider === 'breeze') synthesisMode = 'designed_clone'; }}><option value="qwen">Qwen3-TTS</option><option value="breeze">Breeze TTS 2</option></select></label>
+    </div>
+    <div class="row">
+      <label>Voice workflow<select bind:value={synthesisMode}><option value="designed_clone">Design + clone (recommended)</option>{#if ttsProvider === 'qwen'}<option value="custom_voice">Built-in Qwen voice</option>{/if}</select></label>
     </div>
     {#if synthesisMode === 'designed_clone'}
       <div class="voice-fields">
-        <label>Saved narrator<select bind:value={voiceId}><option value="">Create a new voice for this job</option>{#each voices.filter((voice) => voice.status === 'ready') as voice}<option value={voice.id}>{voice.name}</option>{/each}</select></label>
+        <label>Saved narrator<select bind:value={voiceId}><option value="">Create a new voice for this job</option>{#each voices.filter((voice) => voice.status === 'ready' && voice.tts_provider === ttsProvider) as voice}<option value={voice.id}>{voice.name}</option>{/each}</select></label>
         <label>Narrative voice description<textarea bind:value={voiceDescription} maxlength="1000" rows="4"></textarea></label>
         <label>Reference script<textarea bind:value={referenceText} maxlength="1000" rows="3"></textarea></label>
-        <p class="hint">VoiceDesign reads this short script, then the Base model clones that result consistently across every chapter.</p>
+        {#if ttsProvider === 'breeze'}
+          <label>Voice direction (optional)<input bind:value={instruction} maxlength="500" placeholder="Speak slowly with a restrained tone" /></label>
+          <p class="hint">Breeze designs the preview, then uses it and the exact preview script as the reference for each chapter.</p>
+        {:else}
+          <p class="hint">VoiceDesign reads this short script, then the Base model clones that result consistently across every chapter.</p>
+        {/if}
       </div>
     {:else}
       <div class="row">

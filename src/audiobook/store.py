@@ -50,6 +50,7 @@ class JobStore:
                 "voice_id": "TEXT",
                 "hidden": "INTEGER NOT NULL DEFAULT 0",
                 "source_job_id": "TEXT",
+                "tts_provider": "TEXT NOT NULL DEFAULT 'qwen'",
             }
             for name, definition in migrations.items():
                 if name not in columns:
@@ -66,10 +67,16 @@ class JobStore:
                 CREATE TABLE IF NOT EXISTS voices (
                     id TEXT PRIMARY KEY, name TEXT NOT NULL, language TEXT NOT NULL,
                     description TEXT NOT NULL, reference_text TEXT NOT NULL,
+                    tts_provider TEXT NOT NULL DEFAULT 'qwen',
                     status TEXT NOT NULL, preview_url TEXT, error TEXT,
                     created_at TEXT NOT NULL, updated_at TEXT NOT NULL
                 )
             """)
+            voice_columns = {row["name"] for row in db.execute("PRAGMA table_info(voices)")}
+            if "tts_provider" not in voice_columns:
+                db.execute(
+                    "ALTER TABLE voices ADD COLUMN tts_provider TEXT NOT NULL DEFAULT 'qwen'"
+                )
 
     def create(self, request: CreateJob) -> Job:
         now = datetime.now(UTC).isoformat()
@@ -81,8 +88,10 @@ class JobStore:
                        voice_instruction, status, stage, progress, chapters_total,
                        chapters_completed, error, output_dir, created_at, updated_at,
                        synthesis_mode, voice_description, reference_text,
-                       voice_preview_url, voice_id, source_job_id
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       voice_preview_url, voice_id, source_job_id, tts_provider
+                   ) VALUES (
+                       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                   )""",
                 (
                     job_id,
                     str(request.novel_url),
@@ -106,6 +115,7 @@ class JobStore:
                     None,
                     request.voice_id,
                     request.source_job_id,
+                    request.tts_provider,
                 ),
             )
         return self.get(job_id)
@@ -116,10 +126,13 @@ class JobStore:
         with self._connect() as db:
             db.execute(
                 """INSERT INTO voices (id, name, language, description, reference_text,
-                   status, preview_url, error, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (voice_id, request.name, request.language, request.description,
-                 request.reference_text, VoiceStatus.QUEUED, None, None, now, now),
+                   tts_provider, status, preview_url, error, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    voice_id, request.name, request.language, request.description,
+                    request.reference_text, request.tts_provider, VoiceStatus.QUEUED,
+                    None, None, now, now,
+                ),
             )
         return self.get_voice(voice_id)
 

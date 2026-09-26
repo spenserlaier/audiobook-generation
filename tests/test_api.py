@@ -63,6 +63,23 @@ async def test_invalid_url_and_missing_job(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_breeze_job_rejects_qwen_voice_and_builtin_mode(tmp_path):
+    app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        voice = (await client.post("/api/voices", json={"name": "Qwen voice"})).json()
+        app.state.store.update_voice(voice["id"], status="ready", preview_url="/preview")
+        base = {"novel_url": "https://example.com/book", "tts_provider": "breeze"}
+        wrong_voice = await client.post("/api/jobs", json={**base, "voice_id": voice["id"]})
+        assert wrong_voice.status_code == 400
+        built_in = await client.post(
+            "/api/jobs", json={**base, "synthesis_mode": "custom_voice"}
+        )
+        assert built_in.status_code == 422
+
+
+@pytest.mark.anyio
 async def test_failed_voice_can_be_renamed_and_deleted_with_its_files(tmp_path):
     app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
     async with httpx.AsyncClient(

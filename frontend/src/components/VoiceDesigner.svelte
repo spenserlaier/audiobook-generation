@@ -4,6 +4,7 @@
   let { voices, onChanged } = $props();
   let name = $state('Narrator');
   let language = $state('Auto');
+  let ttsProvider = $state('qwen');
   let description = $state('A compelling, warm audiobook narrator with a clear mid-low register, measured pacing, subtle emotional range, crisp diction, and an intimate storytelling tone.');
   let referenceText = $state('The road disappeared into the evening mist, and with every quiet step, the old world fell farther behind. Ahead waited a story no one had dared to tell.');
   let error = $state('');
@@ -14,7 +15,7 @@
   async function submit() {
     error = ''; submitting = true;
     try {
-      await jsonPost('/api/voices', {name, language, description, reference_text: referenceText});
+      await jsonPost('/api/voices', {name, language, tts_provider: ttsProvider, description, reference_text: referenceText});
       await onChanged();
     } catch (exc) { error = exc.message; }
     finally { submitting = false; }
@@ -51,6 +52,7 @@
       <label>Voice name<input bind:value={name} maxlength="120" required /></label>
       <label>Language<input bind:value={language} /></label>
     </div>
+    <label>TTS model<select bind:value={ttsProvider}><option value="qwen">Qwen3-TTS</option><option value="breeze">Breeze TTS 2</option></select></label>
     <label>Voice description<textarea bind:value={description} maxlength="1000" rows="4"></textarea></label>
     <label>Preview script<textarea bind:value={referenceText} maxlength="1000" rows="3"></textarea></label>
     <div class="actions"><button disabled={submitting}>{submitting ? 'Queueing…' : 'Generate voice preview'}</button></div>
@@ -68,7 +70,7 @@
               <button class="quiet" type="button" onclick={() => editingId = null}>Cancel</button>
             </form>
           {:else}
-            <strong>{voice.name}</strong> <small>· {voice.status}</small>
+            <strong>{voice.name}</strong> <small>· {voice.tts_provider === 'breeze' ? 'Breeze TTS 2' : 'Qwen3-TTS'} · {voice.status}</small>
             <div class="voice-controls"><button class="quiet" type="button" onclick={() => beginRename(voice)}>Rename</button><button class="danger" type="button" onclick={() => remove(voice)}>Delete</button></div>
           {/if}
           {#if voice.error}<p class="failed">{voice.error}</p>{/if}

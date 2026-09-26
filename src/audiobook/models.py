@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, model_validator
 
 
 class JobStatus(StrEnum):
@@ -18,6 +18,11 @@ class SynthesisMode(StrEnum):
     CUSTOM_VOICE = "custom_voice"
 
 
+class TTSProvider(StrEnum):
+    QWEN = "qwen"
+    BREEZE = "breeze"
+
+
 class CreateJob(BaseModel):
     novel_url: HttpUrl
     title: str | None = Field(default=None, max_length=300)
@@ -26,6 +31,7 @@ class CreateJob(BaseModel):
     speaker: str = Field(default="Ryan", max_length=80)
     voice_instruction: str = Field(default="", max_length=500)
     synthesis_mode: SynthesisMode = SynthesisMode.DESIGNED_CLONE
+    tts_provider: TTSProvider = TTSProvider.QWEN
     voice_id: str | None = Field(default=None, max_length=32)
     source_job_id: str | None = Field(default=None, max_length=32)
     voice_description: str = Field(
@@ -44,6 +50,15 @@ class CreateJob(BaseModel):
         min_length=1,
         max_length=1000,
     )
+
+    @model_validator(mode="after")
+    def validate_provider_mode(self) -> "CreateJob":
+        if (
+            self.tts_provider == TTSProvider.BREEZE
+            and self.synthesis_mode == SynthesisMode.CUSTOM_VOICE
+        ):
+            raise ValueError("Built-in voices are available only with Qwen")
+        return self
 
 
 class Chapter(BaseModel):
@@ -68,6 +83,7 @@ class Job(BaseModel):
     speaker: str
     voice_instruction: str
     synthesis_mode: SynthesisMode
+    tts_provider: TTSProvider
     voice_id: str | None
     source_job_id: str | None
     voice_description: str
@@ -114,6 +130,7 @@ class VoiceStatus(StrEnum):
 class CreateVoice(BaseModel):
     name: str = Field(default="Narrator", min_length=1, max_length=120)
     language: str = Field(default="Auto", max_length=40)
+    tts_provider: TTSProvider = TTSProvider.QWEN
     description: str = Field(
         default=(
             "A compelling, warm audiobook narrator with a clear mid-low register, measured "
@@ -140,6 +157,7 @@ class Voice(BaseModel):
     id: str
     name: str
     language: str
+    tts_provider: TTSProvider
     description: str
     reference_text: str
     status: VoiceStatus

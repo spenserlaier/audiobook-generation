@@ -116,6 +116,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             if voice.status != VoiceStatus.READY:
                 raise HTTPException(status_code=409, detail="Voice is not ready")
+            if voice.tts_provider != request.tts_provider:
+                raise HTTPException(
+                    status_code=400, detail="Saved voice belongs to a different TTS model"
+                )
         job = store.create(request)
         workers.submit(job.id)
         return job

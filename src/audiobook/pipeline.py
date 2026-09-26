@@ -2,9 +2,10 @@ import queue
 import threading
 
 from .audio import write_mock_wav
+from .breeze import BreezeSynthesizer
 from .config import Settings
 from .crawler import CrawlCancelled, crawl
-from .models import Chapter, JobStatus, SynthesisMode, VoiceStatus
+from .models import Chapter, JobStatus, SynthesisMode, TTSProvider, VoiceStatus
 from .store import JobStore
 from .tts import QwenSynthesizer
 
@@ -14,10 +15,15 @@ class Pipeline:
         self.settings = settings
         self.store = store
         self.tts = QwenSynthesizer(settings)
+        self.breeze = BreezeSynthesizer(settings)
+
+    def _synthesizer(self, provider: TTSProvider):
+        return self.breeze if provider == TTSProvider.BREEZE else self.tts
 
     def run(self, job_id: str, cancel_event: threading.Event | None = None) -> None:
         cancel_event = cancel_event or threading.Event()
         job = self.store.get(job_id)
+        synthesizer = self._synthesizer(job.tts_provider)
         job_dir = self.settings.data_dir / "jobs" / job.id
         try:
             if cancel_event.is_set():
@@ -87,6 +93,8 @@ class Pipeline:
                     voice = self.store.get_voice(job.voice_id)
                     if voice.status != VoiceStatus.READY:
                         raise RuntimeError(f"Selected voice is not ready (status: {voice.status})")
+                    if voice.tts_provider != job.tts_provider:
+                        raise RuntimeError("Selected voice was created with a different TTS model")
                     reference_audio = (
                         self.settings.data_dir / "voices" / voice.id / "preview.wav"
                     )
@@ -103,7 +111,7 @@ class Pipeline:
                     if self.settings.mock_pipeline:
                         write_mock_wav(reference_audio, job.reference_text)
                     else:
-                        self.tts.design_voice(
+                        synthesizer.design_voice(
                             job.reference_text,
                             job.voice_description,
                             job.language,
@@ -117,8 +125,7 @@ class Pipeline:
                 if cancel_event.is_set():
                     raise CrawlCancelled("Job cancelled")
                 if not self.settings.mock_pipeline:
-                    # Loading Base releases VoiceDesign and its CUDA allocation first.
-                    clone_prompt = self.tts.create_clone_prompt(reference_audio, reference_text)
+                    clone_prompt = synthesizer.create_clone_prompt(reference_audio, reference_text)
                 if cancel_event.is_set():
                     raise CrawlCancelled("Job cancelled")
             for completed, chapter in enumerate(chapters, 1):
@@ -129,9 +136,16 @@ class Pipeline:
                 if self.settings.mock_pipeline:
                     write_mock_wav(output, chapter.text)
                 elif job.synthesis_mode == SynthesisMode.DESIGNED_CLONE:
-                    self.tts.synthesize_clone(chapter.text, output, job.language, clone_prompt)
+                    if job.tts_provider == TTSProvider.BREEZE:
+                        synthesizer.synthesize_clone(
+                            chapter.text, output, job.language, clone_prompt, job.voice_instruction
+                        )
+                    else:
+                        synthesizer.synthesize_clone(
+                            chapter.text, output, job.language, clone_prompt
+                        )
                 else:
-                    self.tts.synthesize_custom(
+                    synthesizer.synthesize_custom(
                         chapter.text, output, job.language, job.speaker, job.voice_instruction
                     )
                 audio_url = f"/api/jobs/{job.id}/chapters/{chapter.index}/audio"
@@ -161,10 +175,11 @@ class Pipeline:
             )
         finally:
             if self.settings.tts_release_after_job:
-                self.tts.release()
+                synthesizer.release()
 
     def generate_voice(self, voice_id: str) -> None:
         voice = self.store.get_voice(voice_id)
+        synthesizer = self._synthesizer(voice.tts_provider)
         output = self.settings.data_dir / "voices" / voice.id / "preview.wav"
         try:
             self.store.update_voice(
@@ -173,7 +188,7 @@ class Pipeline:
             if self.settings.mock_pipeline:
                 write_mock_wav(output, voice.reference_text)
             else:
-                self.tts.design_voice(
+                synthesizer.design_voice(
                     voice.reference_text, voice.description, voice.language, output
                 )
             self.store.update_voice(
@@ -189,7 +204,7 @@ class Pipeline:
             )
         finally:
             if self.settings.tts_release_after_job:
-                self.tts.release()
+                synthesizer.release()
 
 
 class WorkerPool:

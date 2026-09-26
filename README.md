@@ -3,7 +3,8 @@
 A local, UI-driven service that crawls novels supported by
 [lightnovel-crawler](https://github.com/lncrawl/lightnovel-crawler), stores chapter text and
 job progress in SQLite, designs a reusable narrative voice, and renders chapter WAV files with
-[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS).
+[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) or
+[Breeze TTS 2](https://github.com/breezeblue-ai/breeze-tts).
 
 ## Quick start (mock mode)
 
@@ -76,6 +77,29 @@ that `nvidia-smi` works, that the PyTorch CUDA build is supported by the install
 that no display instability appears in a short one-chunk smoke test. A separate non-display GPU is
 the safest arrangement for unattended generation.
 
+## Breeze TTS 2
+
+Breeze runs through its [official local streaming API](https://github.com/breezeblue-ai/breeze-tts).
+Install the audiobook client with `pip install -e '.[crawler,breeze]'`. In a separate Python 3.11 or
+3.12 environment, install the official Breeze inference repository and download the
+`BreezeBlue/Breeze-TTS-2` checkpoint following its README. Start its server with a local checkpoint
+directory, for example:
+
+```bash
+python -m breeze_infer.api /path/to/breeze-tts-2 --host 127.0.0.1 --port 7860
+```
+
+Then start `audiobook-server` and choose **Breeze TTS 2** on the audiobook or saved-voice form. The
+default `AUDIOBOOK_BREEZE_API_URL` is `http://127.0.0.1:7860`. The API permits one inference request
+at a time, so keep `AUDIOBOOK_WORKER_COUNT=1`. Breeze voice design creates a preview from the voice
+description and script. Chapter synthesis uses that preview and its exact script as the cloning
+reference. The optional voice-direction field steers its delivery. Breeze does not support the
+Qwen built-in-speaker workflow. Saved voices remain tied to the model that created them.
+
+The Breeze checkpoint and self-hosted outputs are licensed for research and non-commercial use.
+The official eager runtime recommends at least 12 GB of CUDA GPU memory; the faster path has a
+larger memory requirement. Use a short chapter smoke test before a full book.
+
 ## Configuration
 
 All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
@@ -110,6 +134,11 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_CHUNK_CHARS` | `1200` | Maximum text characters per synthesis call |
 | `AUDIOBOOK_WORKER_COUNT` | `1` | Concurrent background jobs; one is safest for GPU memory |
 | `AUDIOBOOK_TTS_RELEASE_AFTER_JOB` | `true` | Release model and cached VRAM after each job |
+| `AUDIOBOOK_BREEZE_API_URL` | `http://127.0.0.1:7860` | Official Breeze inference server |
+| `AUDIOBOOK_BREEZE_CFG_SCALE` | `4.0` | Breeze design/direction guidance; plain cloning uses 1.0 |
+| `AUDIOBOOK_BREEZE_SEED` | `42` | Base seed; chunks and retries use distinct seeds |
+| `AUDIOBOOK_BREEZE_CHUNK_CHARS` | `400` | Maximum text characters per Breeze request |
+| `AUDIOBOOK_BREEZE_TIMEOUT_SECONDS` | `300` | Maximum wait between streamed audio chunks |
 | `AUDIOBOOK_MOCK_PIPELINE` | `false` | Use deterministic local chapters and short tone WAVs |
 
 The UI can generate reusable narrator previews before a novel is submitted. Completed chapters can

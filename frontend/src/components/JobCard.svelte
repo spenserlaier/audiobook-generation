@@ -20,7 +20,7 @@
 
 <article class="job">
   <div class="job-head">
-    <div><h3>{job.title || 'Untitled audiobook'}</h3><small>{job.novel_url}</small></div>
+    <div><h3>{job.title || 'Untitled audiobook'}</h3><small>{job.tts_provider === 'breeze' ? 'Breeze TTS 2' : 'Qwen3-TTS'} · {job.novel_url}</small></div>
     <div class="job-controls">
       <strong>{job.status}</strong>
       {#if job.chapters_total && !activeStatuses.includes(job.status)}<button class="quiet" type="button" onclick={() => onRegenerate(job)}>Regenerate</button>{/if}
