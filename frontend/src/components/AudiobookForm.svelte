@@ -55,6 +55,7 @@
 </script>
 
 <section class="panel">
+  <h2>Create an audiobook</h2>
   <form id="job-form" onsubmit={(event) => { event.preventDefault(); submit(); }}>
     {#if sourceJob}<div class="notice"><span>Using saved chapters from <strong>{sourceJob.title || 'Untitled audiobook'}</strong>; the crawler will be skipped.</span><button class="quiet" type="button" onclick={onCancelRegeneration}>Use a new crawl</button></div>{/if}
     <label>Novel URL<input bind:value={novelUrl} type="url" required placeholder="https://supported-site.example/novel" /></label>

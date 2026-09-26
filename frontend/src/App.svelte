@@ -6,7 +6,7 @@
   import StorageView from './components/StorageView.svelte';
   import VoiceDesigner from './components/VoiceDesigner.svelte';
 
-  let view = $state('generate');
+  let view = $state('narrators');
   let jobs = $state([]);
   let voices = $state([]);
   let sourceJob = $state(null);
@@ -22,6 +22,14 @@
   }
   async function changed() {
     await refreshJobs();
+  }
+  async function created() {
+    await refreshJobs();
+    view = 'jobs';
+  }
+  function regenerate(job) {
+    sourceJob = job;
+    view = 'audiobooks';
   }
   async function clearJobs() {
     if (!confirm('Remove every job from the main list? Generation will continue and files will be kept.')) return;
@@ -43,17 +51,26 @@
 
 <main>
   <header><p class="eyebrow">LOCAL AUDIOBOOK STUDIO</p><h1>Audiobook Foundry</h1><p>Crawl a novel, design its narrator, and generate an audiobook locally.</p></header>
-  <nav class="tabs"><button class:active={view === 'generate'} class="tab" onclick={() => view = 'generate'}>Generate</button><button class:active={view === 'storage'} class="tab" onclick={() => view = 'storage'}>Storage</button></nav>
-  {#if view === 'generate'}
+  <nav class="tabs" aria-label="Main sections">
+    <button class:active={view === 'narrators'} class="tab" aria-current={view === 'narrators' ? 'page' : undefined} onclick={() => view = 'narrators'}>Narrators</button>
+    <button class:active={view === 'audiobooks'} class="tab" aria-current={view === 'audiobooks' ? 'page' : undefined} onclick={() => view = 'audiobooks'}>Audiobooks</button>
+    <button class:active={view === 'jobs'} class="tab" aria-current={view === 'jobs' ? 'page' : undefined} onclick={() => view = 'jobs'}>Jobs</button>
+    <button class:active={view === 'storage'} class="tab" aria-current={view === 'storage' ? 'page' : undefined} onclick={() => view = 'storage'}>Storage</button>
+  </nav>
+  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  <div hidden={view !== 'narrators'}>
     <VoiceDesigner {voices} onChanged={refreshVoices} />
-    <AudiobookForm {voices} {sourceJob} onCreated={refreshJobs} onCancelRegeneration={() => sourceJob = null} />
+  </div>
+  <div hidden={view !== 'audiobooks'}>
+    <AudiobookForm {voices} {sourceJob} onCreated={created} onCancelRegeneration={() => sourceJob = null} />
+  </div>
+  {#if view === 'jobs'}
     <div class="section-title"><h2>Jobs</h2><div class="section-actions"><button class="quiet" onclick={refreshJobs}>Refresh</button><button class="danger" onclick={clearQueue}>Clear queue</button><button class="quiet" onclick={clearJobs}>Clear list</button></div></div>
-    {#if error}<p class="error">{error}</p>{/if}
     <div class="jobs">
       {#if jobs.length === 0}<p class="empty">No jobs yet.</p>{/if}
-      {#each jobs as job (job.id)}<JobCard {job} onChanged={changed} onRegenerate={(selected) => sourceJob = selected} />{/each}
+      {#each jobs as job (job.id)}<JobCard {job} onChanged={changed} onRegenerate={regenerate} />{/each}
     </div>
-  {:else}
+  {:else if view === 'storage'}
     <StorageView onChanged={refreshJobs} />
   {/if}
 </main>
