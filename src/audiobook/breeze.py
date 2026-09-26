@@ -65,12 +65,13 @@ class BreezeSynthesizer:
                         endpoint.hostname,
                         "--port",
                         str(endpoint.port or 7860),
-                    ],
+                    ]
+                    + (["--fast-all"] if self.settings.breeze_fast_all else []),
                     cwd=source,
                     stdout=log,
                     stderr=subprocess.STDOUT,
                 )
-        deadline = time.monotonic() + 120
+        deadline = time.monotonic() + self.settings.breeze_startup_timeout_seconds
         health_url = f"{self.settings.breeze_api_url.rstrip('/')}/health"
         while time.monotonic() < deadline:
             if self._server.poll() is not None:

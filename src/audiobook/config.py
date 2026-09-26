@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     worker_count: int = Field(default=1, ge=1)
     tts_release_after_job: bool = True
     breeze_api_url: str = "http://127.0.0.1:7860"
+    breeze_fast_all: bool = False
+    breeze_startup_timeout_seconds: int = Field(default=600, ge=1)
     breeze_cfg_scale: float = Field(default=4.0, gt=0)
     breeze_seed: int = 42
     breeze_chunk_chars: int = Field(default=400, ge=1)

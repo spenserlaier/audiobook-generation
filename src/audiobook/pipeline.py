@@ -20,6 +20,14 @@ class Pipeline:
     def _synthesizer(self, provider: TTSProvider):
         return self.breeze if provider == TTSProvider.BREEZE else self.tts
 
+    def _prepare_synthesis(self, provider: TTSProvider) -> None:
+        if self.settings.mock_pipeline:
+            return
+        if provider == TTSProvider.BREEZE:
+            self.tts.release()
+        else:
+            self.breeze.close()
+
     def run(self, job_id: str, cancel_event: threading.Event | None = None) -> None:
         cancel_event = cancel_event or threading.Event()
         job = self.store.get(job_id)
@@ -75,6 +83,7 @@ class Pipeline:
                 )
             if cancel_event.is_set():
                 raise CrawlCancelled("Job cancelled")
+            self._prepare_synthesis(job.tts_provider)
             self.store.replace_chapters(job.id, chapters)
             title = job.title or "Audiobook"
             self.store.update(
@@ -182,6 +191,7 @@ class Pipeline:
         synthesizer = self._synthesizer(voice.tts_provider)
         output = self.settings.data_dir / "voices" / voice.id / "preview.wav"
         try:
+            self._prepare_synthesis(voice.tts_provider)
             self.store.update_voice(
                 voice.id, status=VoiceStatus.GENERATING, error=None
             )

@@ -81,6 +81,8 @@ class QwenSynthesizer:
         model = self._model
         self._model = None
         self._model_id = None
+        if model is None:
+            return
         del model
         gc.collect()
         try:

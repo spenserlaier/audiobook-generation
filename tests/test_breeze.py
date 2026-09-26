@@ -3,6 +3,7 @@ import sys
 import wave
 
 import httpx
+import pytest
 
 from audiobook.audio import write_mock_wav
 from audiobook.breeze import BreezeSynthesizer
@@ -111,7 +112,8 @@ def test_pipeline_routes_breeze_job_and_voice_direction(tmp_path):
     assert calls == ["design", "prompt", "Speak slowly", "release"]
 
 
-def test_local_server_uses_venv_python_even_when_it_is_a_symlink(monkeypatch, tmp_path):
+@pytest.mark.parametrize("fast_all", [False, True])
+def test_local_server_uses_venv_python_and_selected_fast_mode(monkeypatch, tmp_path, fast_all):
     runtime = tmp_path / "breeze-runtime"
     python = runtime / ".venv" / "bin" / "python"
     python.parent.mkdir(parents=True)
@@ -136,7 +138,30 @@ def test_local_server_uses_venv_python_even_when_it_is_a_symlink(monkeypatch, tm
     monkeypatch.setattr(
         httpx, "get", lambda *args, **kwargs: httpx.Response(200, json={"status": "ok"})
     )
-    BreezeSynthesizer(Settings(data_dir=tmp_path))._start_local_server(httpx)
+    BreezeSynthesizer(Settings(data_dir=tmp_path, breeze_fast_all=fast_all))._start_local_server(
+        httpx
+    )
 
     assert command[0] == str(python.absolute())
     assert command[0] != str(python.resolve())
+    assert ("--fast-all" in command) is fast_all
+
+
+def test_pipeline_releases_other_model_before_switching_providers(tmp_path):
+    pipeline = Pipeline(Settings(data_dir=tmp_path), JobStore(tmp_path / "state.sqlite3"))
+    calls = []
+
+    class Qwen:
+        def release(self):
+            calls.append("release qwen")
+
+    class Breeze:
+        def close(self):
+            calls.append("stop breeze")
+
+    pipeline.tts = Qwen()
+    pipeline.breeze = Breeze()
+    pipeline._prepare_synthesis(TTSProvider.BREEZE)
+    pipeline._prepare_synthesis(TTSProvider.QWEN)
+
+    assert calls == ["release qwen", "stop breeze"]
