@@ -49,6 +49,20 @@
       await onChanged();
     } catch (exc) { alert(exc.message); }
   }
+
+  function useDescription(voice) {
+    description = voice.description;
+    const field = document.getElementById('narrator-description');
+    field?.scrollIntoView({behavior: 'smooth', block: 'center'});
+    field?.focus({preventScroll: true});
+  }
+
+  function useScript(voice) {
+    referenceText = voice.reference_text;
+    const field = document.getElementById('narrator-script');
+    field?.scrollIntoView({behavior: 'smooth', block: 'center'});
+    field?.focus({preventScroll: true});
+  }
 </script>
 
 <section class="panel">
@@ -60,8 +74,8 @@
       <label>Language<input bind:value={language} /></label>
     </div>
     <label>TTS model<select bind:value={ttsProvider}><option value="qwen">Qwen3-TTS</option><option value="breeze">Breeze TTS 2</option></select></label>
-    <label>Voice description<textarea bind:value={description} maxlength="1000" rows="4"></textarea></label>
-    <label>Preview script<textarea bind:value={referenceText} maxlength="1000" rows="3"></textarea></label>
+    <label>Voice description<textarea id="narrator-description" bind:value={description} maxlength="1000" rows="4"></textarea></label>
+    <label>Preview script<textarea id="narrator-script" bind:value={referenceText} maxlength="1000" rows="3"></textarea></label>
     <div class="actions"><button disabled={submitting}>{submitting ? 'Queueing…' : 'Generate voice preview'}</button></div>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
   </form>
@@ -83,6 +97,17 @@
           {#if voice.error}<p class="failed">{voice.error}</p>{/if}
         </div>
         {#if voice.preview_url}<div class="audio-actions"><audio controls preload="none" src={voice.preview_url}></audio><a class="download" href={voice.preview_url} download>Download preview</a></div>{/if}
+        <details class="voice-settings">
+          <summary>View settings</summary>
+          <div class="voice-setting">
+            <div class="voice-setting-heading"><strong>Voice description</strong><button class="quiet" type="button" onclick={() => useDescription(voice)}>Use description</button></div>
+            <p>{voice.description}</p>
+          </div>
+          <div class="voice-setting">
+            <div class="voice-setting-heading"><strong>Preview script</strong><button class="quiet" type="button" onclick={() => useScript(voice)}>Use script</button></div>
+            <p>{voice.reference_text}</p>
+          </div>
+        </details>
       </div>
     {/each}
   </div>
