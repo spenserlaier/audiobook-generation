@@ -1,4 +1,5 @@
 import json
+import sys
 import wave
 
 import httpx
@@ -108,3 +109,34 @@ def test_pipeline_routes_breeze_job_and_voice_direction(tmp_path):
 
     assert store.get(job.id).status == JobStatus.COMPLETED
     assert calls == ["design", "prompt", "Speak slowly", "release"]
+
+
+def test_local_server_uses_venv_python_even_when_it_is_a_symlink(monkeypatch, tmp_path):
+    runtime = tmp_path / "breeze-runtime"
+    python = runtime / ".venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.symlink_to(sys.executable)
+    source = runtime / "source" / "breeze_infer"
+    source.mkdir(parents=True)
+    (source / "api.py").write_text("")
+    checkpoint = runtime / "checkpoint"
+    checkpoint.mkdir()
+    (checkpoint / "model.safetensors.index.json").write_text("{}")
+    command = []
+
+    class Process:
+        def poll(self):
+            return None
+
+    def start(args, **kwargs):
+        command.extend(args)
+        return Process()
+
+    monkeypatch.setattr("audiobook.breeze.subprocess.Popen", start)
+    monkeypatch.setattr(
+        httpx, "get", lambda *args, **kwargs: httpx.Response(200, json={"status": "ok"})
+    )
+    BreezeSynthesizer(Settings(data_dir=tmp_path))._start_local_server(httpx)
+
+    assert command[0] == str(python.absolute())
+    assert command[0] != str(python.resolve())

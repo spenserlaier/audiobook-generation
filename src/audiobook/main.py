@@ -32,7 +32,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     settings.prepare()
     store = JobStore(settings.database_path)
-    workers = WorkerPool(Pipeline(settings, store), settings.worker_count)
+    pipeline = Pipeline(settings, store)
+    workers = WorkerPool(pipeline, settings.worker_count)
     archives = ArchiveManager(
         settings.data_dir,
         settings.ffmpeg_command,
@@ -49,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             workers.submit_voice(voice_id)
         yield
         workers.stop()
+        pipeline.breeze.close()
 
     app = FastAPI(title="Audiobook Generator", version="0.1.0", lifespan=lifespan)
     app.state.store = store
@@ -288,6 +290,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return store.update_voice(voice_id, name=request.name)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Voice not found") from exc
+
+    @app.post("/api/voices/{voice_id}/retry", response_model=Voice, status_code=202)
+    async def retry_voice(voice_id: str) -> Voice:
+        try:
+            voice = store.get_voice(voice_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Voice not found") from exc
+        if voice.status != VoiceStatus.FAILED:
+            raise HTTPException(status_code=409, detail="Only failed voices can be retried")
+        voice = store.update_voice(voice_id, status=VoiceStatus.QUEUED, error=None)
+        workers.submit_voice(voice_id)
+        return voice
 
     @app.delete("/api/voices/{voice_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def delete_voice(voice_id: str) -> None:

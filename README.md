@@ -80,21 +80,24 @@ the safest arrangement for unattended generation.
 ## Breeze TTS 2
 
 Breeze runs through its [official local streaming API](https://github.com/breezeblue-ai/breeze-tts).
-Install the audiobook client with `pip install -e '.[crawler,breeze]'`. In a separate Python 3.11 or
-3.12 environment, install the official Breeze inference repository and download the
-`BreezeBlue/Breeze-TTS-2` checkpoint following its README. Start its server with a local checkpoint
-directory, for example:
+Install the audiobook client and prepare the official inference code and checkpoint with:
 
 ```bash
-python -m breeze_infer.api /path/to/breeze-tts-2 --host 127.0.0.1 --port 7860
+pip install -e '.[crawler,breeze]'
+bash scripts/setup-breeze.sh
 ```
 
-Then start `audiobook-server` and choose **Breeze TTS 2** on the audiobook or saved-voice form. The
-default `AUDIOBOOK_BREEZE_API_URL` is `http://127.0.0.1:7860`. The API permits one inference request
-at a time, so keep `AUDIOBOOK_WORKER_COUNT=1`. Breeze voice design creates a preview from the voice
+The setup script requires `uv`, uses Python 3.12 by default, and stores its separate runtime and
+checkpoint under `AUDIOBOOK_DATA_DIR/breeze-runtime` (default `data/breeze-runtime`). Start
+`audiobook-server` and choose **Breeze TTS 2** on the audiobook or saved-voice form. When the first
+Breeze request arrives, the app starts the installed local API automatically and stops it on app
+shutdown. The default `AUDIOBOOK_BREEZE_API_URL` is `http://127.0.0.1:7860`; a server already
+running there is reused. The API permits one inference request at a time, so keep
+`AUDIOBOOK_WORKER_COUNT=1`. Breeze voice design creates a preview from the voice
 description and script. Chapter synthesis uses that preview and its exact script as the cloning
 reference. The optional voice-direction field steers its delivery. Breeze does not support the
-Qwen built-in-speaker workflow. Saved voices remain tied to the model that created them.
+Qwen built-in-speaker workflow. Saved voices remain tied to the model that created them. If a
+preview failed before the runtime was installed, use **Retry** on that saved voice after setup.
 
 The Breeze checkpoint and self-hosted outputs are licensed for research and non-commercial use.
 The official eager runtime recommends at least 12 GB of CUDA GPU memory; the faster path has a

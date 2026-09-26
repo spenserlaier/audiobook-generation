@@ -2,8 +2,11 @@
 
 import hashlib
 import json
+import subprocess
+import time
 import wave
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .audio import combine_wavs, split_text
 from .config import Settings
@@ -12,10 +15,76 @@ from .config import Settings
 class BreezeSynthesizer:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self._server: subprocess.Popen | None = None
 
     def release(self) -> None:
         # The separately managed Breeze server owns its model lifetime.
         pass
+
+    def close(self) -> None:
+        if self._server is not None and self._server.poll() is None:
+            self._server.terminate()
+            try:
+                self._server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                self._server.kill()
+                self._server.wait()
+        self._server = None
+
+    def _start_local_server(self, httpx) -> None:
+        endpoint = urlsplit(self.settings.breeze_api_url)
+        if endpoint.scheme != "http" or endpoint.hostname not in {"127.0.0.1", "localhost"}:
+            raise RuntimeError(
+                f"Breeze API is unavailable at {self.settings.breeze_api_url}. "
+                "Start the configured Breeze inference server."
+            )
+        runtime_dir = self.settings.data_dir / "breeze-runtime"
+        python = runtime_dir / ".venv" / "bin" / "python"
+        source = runtime_dir / "source"
+        checkpoint = runtime_dir / "checkpoint"
+        if (
+            not python.is_file()
+            or not (source / "breeze_infer" / "api.py").is_file()
+            or not (checkpoint / "model.safetensors.index.json").is_file()
+        ):
+            raise RuntimeError(
+                f"Breeze API is unavailable at {self.settings.breeze_api_url}. "
+                f"Install its runtime and checkpoint under {runtime_dir}, "
+                "or start an external Breeze server. See the Breeze section in README.md."
+            )
+        if self._server is None or self._server.poll() is not None:
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            with (runtime_dir / "server.log").open("ab") as log:
+                self._server = subprocess.Popen(
+                    [
+                        str(python.absolute()),
+                        "-m",
+                        "breeze_infer.api",
+                        str(checkpoint.resolve()),
+                        "--host",
+                        endpoint.hostname,
+                        "--port",
+                        str(endpoint.port or 7860),
+                    ],
+                    cwd=source,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                )
+        deadline = time.monotonic() + 120
+        health_url = f"{self.settings.breeze_api_url.rstrip('/')}/health"
+        while time.monotonic() < deadline:
+            if self._server.poll() is not None:
+                raise RuntimeError(
+                    f"Breeze server exited during startup. See {runtime_dir / 'server.log'}"
+                )
+            try:
+                response = httpx.get(health_url, timeout=2)
+                if response.status_code == 200 and response.json().get("status") == "ok":
+                    return
+            except (httpx.RequestError, ValueError):
+                pass
+            time.sleep(0.5)
+        raise RuntimeError(f"Breeze server did not become ready. See {runtime_dir / 'server.log'}")
 
     def _speech(
         self,
@@ -47,7 +116,8 @@ class BreezeSynthesizer:
         timeout = httpx.Timeout(
             connect=5.0, read=self.settings.breeze_timeout_seconds, write=30.0, pool=5.0
         )
-        try:
+
+        def send() -> tuple[bytes, int]:
             with httpx.Client(timeout=timeout) as client:
                 if reference_audio is None:
                     response_context = client.stream("POST", url, data=data)
@@ -63,6 +133,13 @@ class BreezeSynthesizer:
                             return self._read_pcm(response)
                 with response_context as response:
                     return self._read_pcm(response)
+
+        try:
+            try:
+                return send()
+            except httpx.ConnectError:
+                self._start_local_server(httpx)
+                return send()
         except httpx.RequestError as exc:
             raise RuntimeError(f"Breeze API request failed at {url}: {exc}") from exc
 

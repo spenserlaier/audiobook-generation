@@ -42,6 +42,13 @@
     try { await request(`/api/voices/${voice.id}`, {method: 'DELETE'}); await onChanged(); }
     catch (exc) { alert(exc.message); }
   }
+
+  async function retry(voice) {
+    try {
+      await request(`/api/voices/${voice.id}/retry`, {method: 'POST'});
+      await onChanged();
+    } catch (exc) { alert(exc.message); }
+  }
 </script>
 
 <section class="panel">
@@ -71,7 +78,7 @@
             </form>
           {:else}
             <strong>{voice.name}</strong> <small>· {voice.tts_provider === 'breeze' ? 'Breeze TTS 2' : 'Qwen3-TTS'} · {voice.status}</small>
-            <div class="voice-controls"><button class="quiet" type="button" onclick={() => beginRename(voice)}>Rename</button><button class="danger" type="button" onclick={() => remove(voice)}>Delete</button></div>
+            <div class="voice-controls">{#if voice.status === 'failed'}<button class="quiet" type="button" onclick={() => retry(voice)}>Retry</button>{/if}<button class="quiet" type="button" onclick={() => beginRename(voice)}>Rename</button><button class="danger" type="button" onclick={() => remove(voice)}>Delete</button></div>
           {/if}
           {#if voice.error}<p class="failed">{voice.error}</p>{/if}
         </div>

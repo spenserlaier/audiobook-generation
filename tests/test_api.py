@@ -105,6 +105,36 @@ async def test_failed_voice_can_be_renamed_and_deleted_with_its_files(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_failed_voice_can_be_retried(tmp_path):
+    app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            voice = (await client.post(
+                "/api/voices", json={"name": "Retry narrator", "tts_provider": "breeze"}
+            )).json()
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                voice = (await client.get(f"/api/voices/{voice['id']}")).json()
+                if voice["status"] == "ready":
+                    break
+                await asyncio.sleep(0.02)
+            assert voice["status"] == "ready"
+            app.state.store.update_voice(voice["id"], status="failed", error="Connection refused")
+            response = await client.post(f"/api/voices/{voice['id']}/retry")
+            assert response.status_code == 202
+            assert response.json()["error"] is None
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                voice = (await client.get(f"/api/voices/{voice['id']}")).json()
+                if voice["status"] == "ready":
+                    break
+                await asyncio.sleep(0.02)
+            assert voice["status"] == "ready"
+
+
+@pytest.mark.anyio
 async def test_voice_used_by_active_job_cannot_be_deleted(tmp_path):
     app = create_app(Settings(data_dir=tmp_path, mock_pipeline=True))
     async with httpx.AsyncClient(
