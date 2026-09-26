@@ -102,9 +102,9 @@ preview failed before the runtime was installed, use **Retry** on that saved voi
 The worker stops an app-managed Breeze server before a Qwen task and releases Qwen before a Breeze
 task. Breeze remains warm across consecutive Breeze tasks; Qwen's normal after-job release setting
 still applies. An independently started Breeze server is managed outside the app and remains loaded
-until you stop it. To opt into Breeze's CUDA graph path, set `AUDIOBOOK_BREEZE_FAST_ALL=true` before
-starting `audiobook-server`. The first Breeze request then waits for graph warmup, which needs more
-GPU memory and may take substantially longer to start.
+until you stop it. App-managed Breeze starts with `--fast-all` by default. The first Breeze request
+waits for graph warmup, which needs more GPU memory and may take substantially longer to start. Set
+`AUDIOBOOK_BREEZE_FAST_ALL=false` to use the eager path.
 
 The Breeze checkpoint and self-hosted outputs are licensed for research and non-commercial use.
 The official eager runtime recommends at least 12 GB of CUDA GPU memory; the faster path has a
@@ -145,7 +145,7 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_WORKER_COUNT` | `1` | Concurrent background jobs; one is safest for GPU memory |
 | `AUDIOBOOK_TTS_RELEASE_AFTER_JOB` | `true` | Release model and cached VRAM after each job |
 | `AUDIOBOOK_BREEZE_API_URL` | `http://127.0.0.1:7860` | Official Breeze inference server |
-| `AUDIOBOOK_BREEZE_FAST_ALL` | `false` | Enable all official Breeze fast stages on app-managed startup |
+| `AUDIOBOOK_BREEZE_FAST_ALL` | `true` | Enable all official Breeze fast stages on app-managed startup |
 | `AUDIOBOOK_BREEZE_STARTUP_TIMEOUT_SECONDS` | `600` | Time allowed for Breeze model load and graph warmup |
 | `AUDIOBOOK_BREEZE_CFG_SCALE` | `4.0` | Breeze design/direction guidance; plain cloning uses 1.0 |
 | `AUDIOBOOK_BREEZE_SEED` | `42` | Base seed; chunks and retries use distinct seeds |
