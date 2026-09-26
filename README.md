@@ -101,6 +101,11 @@ All settings use the `AUDIOBOOK_` prefix and may be placed in `.env`.
 | `AUDIOBOOK_TTS_TOP_K` | `50` | Top-k sampling limit |
 | `AUDIOBOOK_TTS_REPETITION_PENALTY` | `1.08` | Codec-token repetition penalty |
 | `AUDIOBOOK_TTS_SUBTALKER_TEMPERATURE` | `0.75` | Subtalker sampling temperature |
+| `AUDIOBOOK_VOICE_DESIGN_TEMPERATURE` | `0.9` | VoiceDesign main-talker sampling temperature |
+| `AUDIOBOOK_VOICE_DESIGN_TOP_P` | `1.0` | VoiceDesign nucleus sampling threshold |
+| `AUDIOBOOK_VOICE_DESIGN_TOP_K` | `50` | VoiceDesign top-k sampling limit |
+| `AUDIOBOOK_VOICE_DESIGN_REPETITION_PENALTY` | `1.05` | VoiceDesign codec-token repetition penalty |
+| `AUDIOBOOK_VOICE_DESIGN_SUBTALKER_TEMPERATURE` | `0.9` | VoiceDesign subtalker temperature for the official backend |
 | `AUDIOBOOK_TTS_QUALITY_RETRIES` | `2` | Retries for abnormally long chunk output |
 | `AUDIOBOOK_CHUNK_CHARS` | `1200` | Maximum text characters per synthesis call |
 | `AUDIOBOOK_WORKER_COUNT` | `1` | Concurrent background jobs; one is safest for GPU memory |

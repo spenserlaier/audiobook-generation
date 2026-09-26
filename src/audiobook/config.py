@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     tts_top_k: int = Field(default=50, ge=1)
     tts_repetition_penalty: float = Field(default=1.08, ge=1, le=2)
     tts_subtalker_temperature: float = Field(default=0.75, gt=0, le=2)
+    voice_design_temperature: float = Field(default=0.9, gt=0, le=2)
+    voice_design_top_p: float = Field(default=1.0, gt=0, le=1)
+    voice_design_top_k: int = Field(default=50, ge=1)
+    voice_design_repetition_penalty: float = Field(default=1.05, ge=1, le=2)
+    voice_design_subtalker_temperature: float = Field(default=0.9, gt=0, le=2)
     tts_quality_retries: int = Field(default=2, ge=0, le=5)
     chunk_chars: int = Field(default=1200, ge=1)
     mock_pipeline: bool = False

@@ -100,7 +100,7 @@ class QwenSynthesizer:
             text=reference_text,
             language=language,
             instruct=description,
-            **self._generation_options(),
+            **self._voice_design_options(),
         )
         output.parent.mkdir(parents=True, exist_ok=True)
         sf.write(output, wavs[0], sample_rate)
@@ -132,6 +132,26 @@ class QwenSynthesizer:
                     "subtalker_temperature": max(
                         0.6, self.settings.tts_subtalker_temperature - 0.05 * attempt
                     ),
+                }
+            )
+        return options
+
+    def _voice_design_options(self) -> dict[str, int | float | bool]:
+        options: dict[str, int | float | bool] = {
+            "max_new_tokens": self.settings.tts_max_new_tokens,
+            "do_sample": True,
+            "top_k": self.settings.voice_design_top_k,
+            "top_p": self.settings.voice_design_top_p,
+            "temperature": self.settings.voice_design_temperature,
+            "repetition_penalty": self.settings.voice_design_repetition_penalty,
+        }
+        if self.settings.tts_backend == "official":
+            options.update(
+                {
+                    "subtalker_dosample": True,
+                    "subtalker_top_k": self.settings.voice_design_top_k,
+                    "subtalker_top_p": self.settings.voice_design_top_p,
+                    "subtalker_temperature": self.settings.voice_design_subtalker_temperature,
                 }
             )
         return options
